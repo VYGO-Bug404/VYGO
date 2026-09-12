@@ -1,0 +1,125 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Override MapLibre default styles to match dark theme */
+.maplibregl-ctrl-attrib {
+  background: rgba(11,18,21,0.8) !important;
+  color: #94A3B8 !important;
+  font-size: 10px !important;
+}
+.maplibregl-ctrl-attrib a { color: #94A3B8 !important; }
+.maplibregl-ctrl-group {
+  background: #11191D !important;
+  border: 1px solid #253238 !important;
+  border-radius: 12px !important;
+  overflow: hidden;
+}
+.maplibregl-ctrl-group button {
+  background: transparent !important;
+  color: #94A3B8 !important;
+}
+.maplibregl-ctrl-group button:hover { background: #172126 !important; }
+.maplibregl-ctrl-group button span { filter: invert(0.6); }
+
+@layer base {
+  *, *::before, *::after {
+    box-sizing: border-box;
+  }
+
+  html {
+    background-color: #0B1215;
+    color: #F8FAF9;
+    font-family: 'Inter', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    height: 100%;
+    overflow: hidden;
+  }
+
+  body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    overflow: hidden;
+    background-color: #0B1215;
+  }
+
+  #root {
+    height: 100dvh;
+    width: 100%;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+}
+
+@layer utilities {
+  .safe-pb {
+    padding-bottom: max(env(safe-area-inset-bottom, 0px), 0px);
+  }
+
+  .safe-pt {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+
+  .bottom-safe {
+    bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  .scrollbar-none {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
+  }
+
+  .text-money {
+    font-feature-settings: 'tnum';
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+/* Custom thin scrollbar */
+::-webkit-scrollbar {
+  width: 3px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #253238;
+  border-radius: 2px;
+}
+
+/* Route animation */
+@keyframes routeDash {
+  from {
+    stroke-dashoffset: 400;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.route-path {
+  animation: routeDash 2s linear infinite;
+}
+
+/* Pulse ring */
+@keyframes pulseRing {
+  0% {
+    transform: scale(0.8);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(2.4);
+    opacity: 0;
+  }
+}
+
+.pulse-ring {
+  animation: pulseRing 1.8s ease-out infinite;
+}
