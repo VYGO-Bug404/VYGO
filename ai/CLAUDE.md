@@ -148,9 +148,14 @@ ai/
 
 ```python
 # sequencer.py
-def held_karp(stops, t0, pos0, travel_fn, constraints) -> tuple[list[int], float, float]:
-    """Devuelve (orden_óptimo, tiempo_total, distancia_total).
-    Si no existe secuencia factible devuelve (None, inf, inf)."""
+def held_karp(stops, t0, pos0, travel_fn, constraints, k=10) -> tuple[list[int], float, float, bool, int]:
+    """Devuelve (orden_óptimo, tiempo_total, distancia_total, optimo_exacto, secuencias_evaluadas).
+    Si no existe secuencia factible: (None, inf, inf, optimo_exacto, secuencias_evaluadas).
+    <=4 pedidos (<=8 paradas): enumeración exacta de todas las secuencias válidas por
+    precedencia -- optimo_exacto=True, secuencias_evaluadas=las que había que enumerar
+    (90 con 3 pedidos, 2520 con 4). >4 pedidos: camino heurístico (DP + perturbación),
+    optimo_exacto=False. Contrato con el frontend: la UI sólo puede decir "óptimo exacto
+    sobre N secuencias" cuando optimo_exacto es True."""
 
 # insertion.py
 def eval_insertion(plan, oferta, estado) -> tuple[float, float, bool]:

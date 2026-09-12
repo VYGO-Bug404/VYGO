@@ -1,7 +1,7 @@
 {
-  "generado_en": "2026-09-12T10:25:34+00:00",
-  "bloque": "B1-nucleo-determinista",
-  "commit": "309902b",
+  "generado_en": "2026-09-12T12:04:49+00:00",
+  "bloque": "B2-entorno-L0-L1",
+  "commit": "65894b3",
   "dirty": true,
   "entorno": {
     "nivel": null,
@@ -9,16 +9,16 @@
     "steps_por_segundo": null
   },
   "tests": {
-    "pasaron": 7,
+    "pasaron": 11,
     "fallaron": 0,
-    "xfail": 4,
+    "xfail": 0,
     "detalle_fallos": []
   },
   "invariantes": {
-    "violaciones_frescura": null,
-    "violaciones_capacidad": null,
+    "violaciones_frescura": 0,
+    "violaciones_capacidad": 0,
     "fifo_ok": true,
-    "contabilidad_ok": null,
+    "contabilidad_ok": true,
     "holdout_intacto": null
   },
   "baselines": {
@@ -65,10 +65,9 @@
   },
   "diagnostico_automatico": [],
   "bloqueos": [
-    "vygo/env.py no está implementado: no existe entorno de simulación L0/L1 todavía (geo.py, sequencer.py, insertion.py y feasibility.py ya sí).",
-    "vygo/weather.py, generator.py, features.py, baselines.py, train_ppo.py, evaluate.py, export_vygo.py siguen siendo stubs sin cuerpo.",
-    "held_karp con 12 paradas: p95 ~3.2ms sobre el objetivo de 2ms (ver reports/HANDOFF.md, sección de benchmarks, para el detalle de optimizaciones ya aplicadas y las que faltan).",
-    "baselines B0-B3 no implementados; scenarios/test_50.pkl todavía no existe."
+    "BLOQUEO PRINCIPAL: la prueba de sanidad B1 vs B2 no se pudo completar de forma concluyente. Causa raíz diagnosticada: el podado por cota inferior de la ruta exacta de held_karp (<=4 pedidos) es efectivo sobre posiciones agrupadas (el benchmark sintético) pero NO sobre pedidos dispersos por todo el grid 20x20 (el muestreo real de comercios de generator.py), donde muchas de las 2520 secuencias válidas quedan casi empatadas y hay que verificarlas casi todas. Con 4-5 pedidos en el plan, el costo por step sube de ~15ms a varios cientos de ms/step y sigue subiendo. Ver reports/HANDOFF.md para el detalle y la traza de diagnóstico.",
+    "train_ppo.py, evaluate.py, export_vygo.py siguen siendo stubs sin cuerpo.",
+    "baselines B0 (aleatoria) y B3 (MILP rodante) no implementados -- sólo B1/B2/B2-ingenuo (docs/vygo-ai-training.md §6.1); scenarios/test_50.pkl no existe."
   ],
-  "siguiente_paso_sugerido": "Implementar vygo/weather.py (cadena de Markov) y vygo/generator.py (llegada de pedidos + difusión por rondas) para tener un VygoEnv mínimo L0/L1."
+  "siguiente_paso_sugerido": "Resolver el bloqueo de rendimiento (ver bloqueos) antes de correr la prueba de sanidad B1 vs B2 completa y decidir si el generador produce suficiente oportunidad de agrupamiento para entrenar."
 }

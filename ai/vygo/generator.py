@@ -1,4 +1,280 @@
-"""Llegada de pedidos y difusión por rondas (mecanismo de anillos, ai/CLAUDE.md §3).
+"""Llegada de pedidos (Poisson no homogéneo) y difusión por rondas con anillos de
+prioridad (ai/CLAUDE.md §3). El generador no crea datos nuevos del mundo real: simula el
+mecanismo ya descrito para que el agente entrene contra algo con la misma estructura.
 
-Aún no implementado.
+Mecanismo de difusión (clave del problema, ai/CLAUDE.md §3): la notificación de un pedido
+se envía a TODOS los repartidores disponibles (aquí: el agente + N competidores sintéticos).
+Los radios 1500/3000/5000 m son anillos de prioridad por distancia vectorial al origen, no
+un radio de búsqueda expandido. Al cerrar la ronda (45 s) gana el del anillo más interno;
+dentro del mismo anillo, el más cercano; empate, quien respondió antes. Los demás que
+aceptaron -> 'perdida'. Sin aceptaciones -> 'sin_respuesta' y ronda siguiente (radio no
+cambia de significado, pero la ronda avanza). Tras la ronda 3, 'cancelado'.
+
+Ganchos para el evento de media jornada (NO implementado todavía, sólo el punto de
+extensión): `modificador(t, zona) -> (mult_tarifa, mult_demanda)`, aplicado multiplicando
+sobre la tarifa/demanda ya calculadas. `zona` es la celda (fila, col) del comercio.
 """
+
+from __future__ import annotations
+
+import math
+from dataclasses import dataclass, field
+from typing import Callable, Optional
+
+import numpy as np
+
+from vygo.geo import GridWorld
+from vygo.schema import App, Clima
+from vygo.weather import CadenaClima
+
+RADIOS_ANILLO_M: tuple[float, ...] = (1500.0, 3000.0, 5000.0)
+DURACION_RONDA_S = 45.0
+MAX_RONDAS = 3
+EXPIRA_OFERTA_S = 30.0
+
+_TARIFA_BASE_MXN = (28.0, 38.0)
+_TARIFA_BETA_KM_MXN = (7.0, 11.0)
+_PREP_MEDIA_MIN = (6.0, 25.0)
+_DESTINO_MEDIANA_KM = 3.5
+N_COMPETIDORES_BASE = 25
+
+ModificadorFn = Callable[[float, tuple[int, int]], tuple[float, float]]
+
+
+@dataclass(slots=True, frozen=True)
+class Comercio:
+    id: str
+    pos: tuple[int, int]
+    prep_media_s: float
+    intensidad: float  # peso relativo (>0) en la tasa de llegada; refleja la densidad local
+
+
+@dataclass(slots=True)
+class PedidoGenerado:
+    """Lo que el generador produce; env.py lo traduce a `schema.Pedido` para exportar."""
+
+    id: str
+    app: App
+    comercio_id: str
+    origen: tuple[int, int]
+    destino: tuple[int, int]
+    precio: float
+    creado_en: float
+    tiempo_listo_en: float
+    fecha_limite: float
+    theta_frescura: float
+    clima: Clima
+
+
+@dataclass(slots=True)
+class Difusion:
+    pedido_id: str
+    ronda: int
+    radio_metros: float
+    iniciada_en: float
+    cierra_en: float
+
+
+def _perfil_llegada_hora(t: float) -> float:
+    """Multiplicador de demanda por hora del día: picos 13:00-15:00 y 19:00-21:30 sobre
+    una base de 1.0 (mismo espíritu que geo._perfil_hora_default, pero de demanda)."""
+    hora = (t % 86400.0) / 3600.0
+    pico_comida = math.exp(-0.5 * ((hora - 14.0) / 1.2) ** 2)
+    pico_cena = math.exp(-0.5 * ((hora - 20.25) / 1.5) ** 2)
+    return 1.0 + 1.8 * pico_comida + 1.4 * pico_cena
+
+
+def muestrear_comercios(grid: GridWorld, m: int, rng: np.random.Generator) -> list[Comercio]:
+    """M comercios muestreados PONDERADOS por el mapa de densidad de zonas (no uniforme):
+    la concentración geográfica es lo que hace rentable el agrupamiento."""
+
+    pesos = grid.densidad.flatten().astype(np.float64)
+    pesos = pesos / pesos.sum()
+    indices = rng.choice(grid.n * grid.n, size=m, replace=True, p=pesos)
+    comercios = []
+    for k, idx in enumerate(indices):
+        fila, col = divmod(int(idx), grid.n)
+        media_min = rng.uniform(*_PREP_MEDIA_MIN)
+        comercios.append(Comercio(
+            id=f"c{k}", pos=(fila, col), prep_media_s=media_min * 60.0,
+            intensidad=float(grid.densidad[fila, col]),
+        ))
+    return comercios
+
+
+@dataclass
+class GeneradorPedidos:
+    grid: GridWorld
+    comercios: list[Comercio]
+    clima: CadenaClima
+    rng: np.random.Generator
+    n_pedidos_creados: int = 0
+    n_competidores_base: int = N_COMPETIDORES_BASE
+    modificador: Optional[ModificadorFn] = None
+    clima_variable: bool = True  # False en L0: clima fijo (DESPEJADO), sin cadena de Markov
+    prep_variable: bool = True  # False en L0: preparación fija (media del comercio), sin LogNormal
+
+    @classmethod
+    def crear(
+        cls, grid: GridWorld, m_comercios: int = 200, seed: int = 0,
+        clima: Optional[CadenaClima] = None, nivel: str = "L1",
+    ) -> "GeneradorPedidos":
+        rng = np.random.default_rng(seed)
+        comercios = muestrear_comercios(grid, m_comercios, rng)
+        es_l0 = nivel == "L0"
+        return cls(
+            grid=grid, comercios=comercios, clima=clima or CadenaClima.crear(seed=seed), rng=rng,
+            n_competidores_base=0 if es_l0 else N_COMPETIDORES_BASE,
+            clima_variable=not es_l0, prep_variable=not es_l0,
+        )
+
+    def _clima_actual(self, t: float) -> Clima:
+        return self.clima.avanzar(t) if self.clima_variable else self.clima.estado
+
+    def _modificador_en(self, t: float, zona: tuple[int, int]) -> tuple[float, float]:
+        if self.modificador is None:
+            return 1.0, 1.0
+        return self.modificador(t, zona)
+
+    def _lambda_total(self, t: float) -> float:
+        clima_actual = self._clima_actual(t)
+        mult_clima = self.clima.mult_demanda(clima_actual)
+        mult_hora = _perfil_llegada_hora(t)
+        intensidad_total = sum(c.intensidad for c in self.comercios)
+        lambda_base_por_unidad_intensidad = 1.0 / 90.0  # ~1 pedido/90s en el comercio promedio
+        lam = intensidad_total * lambda_base_por_unidad_intensidad * mult_hora * mult_clima
+        return lam
+
+    def siguiente_pedido(self, t: float) -> tuple[float, PedidoGenerado]:
+        """Poisson no homogéneo por adelgazamiento (thinning): (instante, pedido) del
+        siguiente pedido a partir de `t`. Lambda(t, zona, clima): la zona entra vía la
+        intensidad de cada comercio (§ muestrear_comercios) y el modificador de evento."""
+
+        lambda_max = self._lambda_max_cota(t)
+        t_actual = t
+        while True:
+            t_actual += float(self.rng.exponential(1.0 / lambda_max))
+            if self.rng.uniform() <= self._lambda_total(t_actual) / lambda_max:
+                return t_actual, self._crear_pedido(t_actual)
+
+    def _lambda_max_cota(self, t: float, ventana_s: float = 3 * 3600.0) -> float:
+        muestras = [self._lambda_total(t + dt) for dt in np.linspace(0.0, ventana_s, 6)]
+        return max(muestras) * 1.5 + 1e-6
+
+    def _crear_pedido(self, t: float) -> PedidoGenerado:
+        pesos = np.array([c.intensidad for c in self.comercios])
+        comercio = self.comercios[int(self.rng.choice(len(self.comercios), p=pesos / pesos.sum()))]
+        destino = self._muestrear_destino(comercio.pos)
+        clima_actual = self._clima_actual(t)
+        distancia_km = (
+            (abs(destino[0] - comercio.pos[0]) + abs(destino[1] - comercio.pos[1]))
+            * self.grid.cell_size_m / 1000.0
+        )
+        app = list(App)[int(self.rng.integers(0, len(App)))]
+        precio = self._tarifa(distancia_km, clima_actual, comercio.pos, t)
+        if self.prep_variable:
+            prep_s = float(self.rng.lognormal(mean=math.log(comercio.prep_media_s), sigma=0.4))
+        else:
+            prep_s = comercio.prep_media_s
+        tiempo_listo_en = t + prep_s
+
+        # Fecha límite y tolerancia de frescura: el generador no especifica una sampling
+        # explícita para l_i/theta_i (§1.3 del modelo matemático), así que se derivan de la
+        # distancia directa origen->destino con margen generoso -- suficiente para que la
+        # mayoría de los pedidos sean cumplibles sin agrupar (frescura ajustada es la
+        # EXCEPCIÓN que fuerza espera estratégica o rechazo, no la norma).
+        dt_directo, _dm = self.grid.travel(comercio.pos, destino, tiempo_listo_en, clima_actual)
+        fecha_limite = tiempo_listo_en + dt_directo * 1.6 + 600.0
+        theta_frescura = float(self.rng.uniform(900.0, 2400.0))
+
+        self.n_pedidos_creados += 1
+        return PedidoGenerado(
+            id=f"p{self.n_pedidos_creados}", app=app, comercio_id=comercio.id,
+            origen=comercio.pos, destino=destino, precio=precio, creado_en=t,
+            tiempo_listo_en=tiempo_listo_en, fecha_limite=fecha_limite,
+            theta_frescura=theta_frescura, clima=clima_actual,
+        )
+
+    def _muestrear_destino(self, origen: tuple[int, int]) -> tuple[int, int]:
+        """Kernel alrededor del comercio: distancia LogNormal (mediana 3.5 km, cola larga),
+        ángulo uniforme."""
+        mediana_celdas = _DESTINO_MEDIANA_KM * 1000.0 / self.grid.cell_size_m
+        r = float(self.rng.lognormal(mean=math.log(max(mediana_celdas, 0.5)), sigma=0.6))
+        angulo = float(self.rng.uniform(0.0, 2 * math.pi))
+        fila = int(round(origen[0] + r * math.sin(angulo)))
+        col = int(round(origen[1] + r * math.cos(angulo)))
+        fila = min(max(fila, 0), self.grid.n - 1)
+        col = min(max(col, 0), self.grid.n - 1)
+        return (fila, col)
+
+    def _tarifa(self, distancia_km: float, clima: Clima, zona: tuple[int, int], t: float) -> float:
+        base = float(self.rng.uniform(*_TARIFA_BASE_MXN))
+        beta = float(self.rng.uniform(*_TARIFA_BETA_KM_MXN))
+        ruido = float(self.rng.lognormal(mean=0.0, sigma=0.15))
+        mult_clima = self.clima.mult_tarifa(clima)
+        mult_tarifa_evento, _mult_demanda_evento = self._modificador_en(t, zona)
+        return (base + beta * distancia_km) * ruido * mult_clima * mult_tarifa_evento
+
+    # ---- difusión por rondas (anillos de prioridad) ------------------------------
+
+    def iniciar_difusion(self, pedido: PedidoGenerado, ronda: int, t: float) -> Difusion:
+        radio = RADIOS_ANILLO_M[min(ronda, len(RADIOS_ANILLO_M)) - 1]
+        return Difusion(pedido_id=pedido.id, ronda=ronda, radio_metros=radio, iniciada_en=t, cierra_en=t + DURACION_RONDA_S)
+
+    def anillo_de(self, distancia_m: float) -> int:
+        """1/2/3 = anillo; 4 = fuera de todos los anillos (no elegible)."""
+        for i, radio in enumerate(RADIOS_ANILLO_M, start=1):
+            if distancia_m <= radio:
+                return i
+        return 4
+
+    def n_competidores_efectivos(self, pos_origen: tuple[int, int], clima: Clima) -> int:
+        densidad_local = self.grid.densidad_local(pos_origen) / max(self.grid.densidad.mean(), 1e-9)
+        mult_clima = 1.0 + 0.3 * (self.clima.mult_demanda(clima) - 1.0)
+        return max(0, int(round(self.n_competidores_base * densidad_local * mult_clima)))
+
+    def p_gana_estimada(self, distancia_m: float, n_competidores_efectivos: int) -> float:
+        """P(nadie está más cerca que el repartidor), asumiendo competidores uniformes en
+        el área del anillo 3 (adelgazamiento de Poisson). Feature precalculado (§6) y
+        estimador rápido para baselines; `resolver_ronda` simula competidores concretos
+        para la resolución REAL."""
+
+        radio_max = RADIOS_ANILLO_M[-1]
+        area_propia = math.pi * min(distancia_m, radio_max) ** 2
+        area_total = math.pi * radio_max ** 2
+        lam = n_competidores_efectivos * (area_propia / area_total)
+        return math.exp(-lam)
+
+    def resolver_ronda(
+        self,
+        pedido: PedidoGenerado,
+        difusion: Difusion,
+        respuestas_reales: list[tuple[str, float, float]],
+    ) -> tuple[Optional[str], list[str]]:
+        """`respuestas_reales`: (repartidor_id, distancia_m, instante_respuesta) de quienes
+        SÍ aceptaron esta ronda (normalmente 0 o 1: el propio agente). Corre N_comp
+        competidores sintéticos (única función: que p_gana < 1) y devuelve
+        (ganador_id o None, [perdedores_id])."""
+
+        n_comp = self.n_competidores_efectivos(pedido.origen, pedido.clima)
+        aceptaron: list[tuple[str, int, float, float]] = [
+            (rid, self.anillo_de(dist), dist, t_resp) for rid, dist, t_resp in respuestas_reales
+        ]
+
+        prob_acepta_por_anillo = {1: 0.6, 2: 0.3, 3: 0.1}
+        for c in range(n_comp):
+            dist = float(self.rng.uniform(0.0, RADIOS_ANILLO_M[-1] * 1.2))
+            anillo = self.anillo_de(dist)
+            if anillo == 4:
+                continue
+            if self.rng.uniform() < prob_acepta_por_anillo[anillo]:
+                t_resp = difusion.iniciada_en + float(self.rng.uniform(1.0, DURACION_RONDA_S))
+                aceptaron.append((f"_comp{c}", anillo, dist, t_resp))
+
+        if not aceptaron:
+            return None, []
+
+        aceptaron.sort(key=lambda x: (x[1], x[2], x[3]))
+        ganador = aceptaron[0][0]
+        perdedores = [rid for rid, *_ in aceptaron[1:] if not rid.startswith("_comp")]
+        return ganador, perdedores

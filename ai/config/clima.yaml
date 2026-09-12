@@ -1,0 +1,20 @@
+# Cadena de Markov de clima (5 estados, paso de 15 min). Orden fijo: despejado, nublado,
+# lluvia, lluvia_fuerte, tormenta (vygo.schema.CLIMA_SIMULABLE). Cada fila suma 1.0 y es la
+# distribución del estado SIGUIENTE dado el estado de la fila. Diagonal dominante: el clima
+# persiste más de lo que cambia en un paso de 15 min.
+transicion:
+  despejado:     [0.90, 0.07, 0.02, 0.01, 0.00]
+  nublado:       [0.15, 0.70, 0.10, 0.04, 0.01]
+  lluvia:        [0.05, 0.20, 0.55, 0.15, 0.05]
+  lluvia_fuerte: [0.02, 0.08, 0.25, 0.50, 0.15]
+  tormenta:      [0.01, 0.04, 0.10, 0.25, 0.60]
+
+# Multiplicadores por estado, mismo orden. tiempo_viaje ya lo usa geo.py (GridWorld.travel);
+# demanda escala vygo.generator (tasa de llegada de pedidos); tarifa escala el precio
+# ofrecido (clima adverso paga más).
+multiplicadores:
+  tiempo_viaje: [1.00, 1.05, 1.15, 1.30, 1.45]
+  demanda:      [1.00, 1.05, 1.30, 1.50, 1.60]
+  tarifa:       [1.00, 1.00, 1.10, 1.25, 1.35]
+
+paso_segundos: 900

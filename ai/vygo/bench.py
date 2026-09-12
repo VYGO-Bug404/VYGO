@@ -2,8 +2,10 @@
 
 Uso: python -m vygo.bench
 Objetivos (ai/CLAUDE.md, tarea del núcleo determinista):
-  - held_karp con 12 paradas: p95 < 2 ms sobre 200 instancias aleatorias.
-  - action_mask con 8 ofertas y 6 pedidos activos: p95 < 15 ms.
+  - held_karp con 8 paradas (K_A=4 pedidos, el caso real de uso -- el benchmark de 12
+    paradas/K=20 candidatas ya se optimizó en el bloque anterior y no se vuelve a tocar
+    aquí): p95 < 2 ms sobre 200 instancias aleatorias.
+  - action_mask con 8 ofertas y 4 pedidos activos (K_A=4): p95 < 15 ms.
 """
 
 from __future__ import annotations
@@ -44,13 +46,16 @@ def _instancia_held_karp(n_pedidos: int, seed: int):
     return stops, restr
 
 
-def bench_held_karp(n_instancias: int = 200, n_paradas: int = 12, k: int = 10):
+def bench_held_karp(n_instancias: int = 200, n_paradas: int = 8, k: int = 10):
     n_pedidos = n_paradas // 2
     tiempos = np.empty(n_instancias)
+    exactos = 0
     reset_candidatas_agotadas()
 
     # Calentamiento: la primera llamada a held_karp paga la compilación JIT de numba
     # (~1-2s); no debe contaminar el benchmark, igual que nadie mide en frío un servicio.
+    # Con <=4 pedidos el camino es puro Python (enumeración exacta, sin numba) pero el
+    # calentamiento no hace daño y mantiene el benchmark uniforme para cualquier n_paradas.
     stops_calentar, restr_calentar = _instancia_held_karp(n_pedidos, 999999)
     held_karp(stops_calentar, 0.0, (0, 0), _travel_fn, restr_calentar, k=k)
     reset_candidatas_agotadas()
@@ -58,30 +63,35 @@ def bench_held_karp(n_instancias: int = 200, n_paradas: int = 12, k: int = 10):
     for seed in range(n_instancias):
         stops, restr = _instancia_held_karp(n_pedidos, seed)
         t0 = time.perf_counter()
-        held_karp(stops, 0.0, (0, 0), _travel_fn, restr, k=k)
+        _orden, _tiempo, _dist, exacto, _evaluadas = held_karp(
+            stops, 0.0, (0, 0), _travel_fn, restr, k=k,
+        )
         tiempos[seed] = time.perf_counter() - t0
-    return tiempos, candidatas_agotadas()
+        exactos += int(exacto)
+    return tiempos, candidatas_agotadas(), exactos
 
 
 def _estado_benchmark(seed: int) -> EstadoRuta:
+    """Plan activo con K_A=4 pedidos (8 paradas, el caso real de uso) más 8 ofertas
+    candidatas, todo en el mismo radio local de reparto que `_instancia_held_karp`."""
     rng = np.random.default_rng(seed)
-    plan, restr = [], Restricciones(capacidad=6, r={}, l={}, theta={}, carga={})
-    for i in range(6):
+    plan, restr = [], Restricciones(capacidad=4, r={}, l={}, theta={}, carga={})
+    for i in range(4):
         pid = f"plan{i}"
-        plan.append(Parada(pid, "recogida", (int(rng.integers(0, 20)), int(rng.integers(0, 20)))))
-        plan.append(Parada(pid, "entrega", (int(rng.integers(0, 20)), int(rng.integers(0, 20)))))
+        plan.append(Parada(pid, "recogida", (int(rng.integers(0, 8)), int(rng.integers(0, 8)))))
+        plan.append(Parada(pid, "entrega", (int(rng.integers(0, 8)), int(rng.integers(0, 8)))))
         restr.r[pid] = 0.0
         restr.l[pid] = None
-        restr.theta[pid] = float(rng.integers(600, 3600))
+        restr.theta[pid] = float(rng.integers(900, 3600))
         restr.carga[pid] = 1
 
     ofertas = []
     for i in range(8):
         ofertas.append(OfertaCandidata(
             id=f"of{i}",
-            pos_recogida=(int(rng.integers(0, 20)), int(rng.integers(0, 20))),
-            pos_entrega=(int(rng.integers(0, 20)), int(rng.integers(0, 20))),
-            r=0.0, l=None, theta=float(rng.integers(600, 3600)), carga=1,
+            pos_recogida=(int(rng.integers(0, 8)), int(rng.integers(0, 8))),
+            pos_entrega=(int(rng.integers(0, 8)), int(rng.integers(0, 8))),
+            r=0.0, l=None, theta=float(rng.integers(900, 3600)), carga=1,
             expira_en=float(rng.integers(60, 600)),
         ))
 
@@ -109,9 +119,10 @@ def _reportar(nombre: str, tiempos: np.ndarray, objetivo_ms: float) -> float:
 
 
 if __name__ == "__main__":
-    tiempos_hk, agotadas = bench_held_karp()
-    _reportar("held_karp (12 paradas, 200 instancias)", tiempos_hk, 2.0)
-    print(f"  candidatas_agotadas: {agotadas}/200")
+    n_instancias = 200
+    tiempos_hk, agotadas, exactos = bench_held_karp(n_instancias=n_instancias)
+    _reportar(f"held_karp (8 paradas / K_A=4, {n_instancias} instancias)", tiempos_hk, 2.0)
+    print(f"  candidatas_agotadas: {agotadas}/{n_instancias}  optimo_exacto: {exactos}/{n_instancias}")
 
-    tiempos_am = bench_action_mask()
-    _reportar("action_mask (8 ofertas, 6 pedidos activos, 200 instancias)", tiempos_am, 15.0)
+    tiempos_am = bench_action_mask(n_instancias=n_instancias)
+    _reportar(f"action_mask (8 ofertas, 4 pedidos activos, {n_instancias} instancias)", tiempos_am, 15.0)

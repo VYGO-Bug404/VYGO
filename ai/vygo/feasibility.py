@@ -17,7 +17,7 @@ K_F = 8
 HOLGURA_MINIMA_REPOSICIONAR_S = 5 * 60.0
 
 
-def _holguras_frescura(estado: EstadoRuta) -> list[float]:
+def holguras_frescura_plan(estado: EstadoRuta) -> list[float]:
     """Holgura de frescura (theta_i - (T_entrega - S_recogida)) de cada pedido del plan
     activo que tenga theta definido, según el calendario real (con cualquier espera
     estratégica ya aplicada) de la secuencia óptima del plan."""
@@ -25,7 +25,7 @@ def _holguras_frescura(estado: EstadoRuta) -> list[float]:
     if not estado.plan:
         return []
 
-    orden, _tiempo, _dist = baseline_plan(estado)
+    orden, _tiempo, _dist, _exacto, _evaluadas = baseline_plan(estado)
     if orden is None:
         return []
 
@@ -72,7 +72,7 @@ def action_mask(estado: EstadoRuta) -> np.ndarray:
 
     mask[K_F] = True  # rechazar_todas: siempre disponible
 
-    holguras = _holguras_frescura(estado)
+    holguras = holguras_frescura_plan(estado)
     mask[K_F + 1] = not any(h < HOLGURA_MINIMA_REPOSICIONAR_S for h in holguras)
 
     return mask

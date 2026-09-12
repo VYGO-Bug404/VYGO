@@ -43,6 +43,10 @@ _MAX_PARADAS = 12
 _MAX_ITER_PUNTO_FIJO = 20
 _EPS = 1e-6
 
+# Con <=4 pedidos (<=8 paradas) enumerar TODAS las secuencias válidas por precedencia es
+# barato (90 para 3 pedidos, 2520 para 4) y exacto: nada de heurística de perturbación.
+_UMBRAL_EXACTO_PEDIDOS = 4
+
 _contador_candidatas_agotadas = 0
 
 
@@ -100,13 +104,17 @@ def _mascaras_validas(paradas: list[Parada], restricciones: Restricciones) -> np
     for idx, parada in enumerate(paradas):
         por_id.setdefault(parada.id, []).append(idx)
 
+    # (pid, idx_recogida o None, idx_entrega). idx_recogida=None significa "ya recogido":
+    # el pedido entra a held_karp sólo con su parada de entrega (env.py lo hace así una
+    # vez que el vehículo ya pasó por la recogida) -- sin restricción de precedencia, y
+    # cuenta como carga ya embarcada desde el inicio de este cálculo.
     pares = []
     for pid, idxs in por_id.items():
         recogidas = [i for i in idxs if paradas[i].tipo == "recogida"]
         entregas = [i for i in idxs if paradas[i].tipo == "entrega"]
-        if len(recogidas) != 1 or len(entregas) != 1:
-            raise ValueError(f"pedido {pid} debe tener exactamente una recogida y una entrega")
-        pares.append((pid, recogidas[0], entregas[0]))
+        if len(entregas) != 1 or len(recogidas) > 1:
+            raise ValueError(f"pedido {pid} debe tener una entrega y a lo más una recogida")
+        pares.append((pid, recogidas[0] if recogidas else None, entregas[0]))
 
     # Vectorizado sobre las 2**n máscaras a la vez (nada de loop por máscara en Python):
     # para cada pedido, qué máscaras "tienen recogida"/"tienen entrega" es una operación de
@@ -115,8 +123,11 @@ def _mascaras_validas(paradas: list[Parada], restricciones: Restricciones) -> np
     ok = np.ones(n_mascaras, dtype=np.bool_)
     carga_actual = np.zeros(n_mascaras, dtype=np.int64)
     for pid, idx_r, idx_e in pares:
-        tiene_r = (mascaras & (1 << idx_r)) != 0
         tiene_e = (mascaras & (1 << idx_e)) != 0
+        if idx_r is None:
+            carga_actual += np.where(~tiene_e, restricciones.carga_de(pid), 0)
+            continue
+        tiene_r = (mascaras & (1 << idx_r)) != 0
         ok &= ~(tiene_e & ~tiene_r)
         carga_actual += np.where(tiene_r & ~tiene_e, restricciones.carga_de(pid), 0)
     return ok & (carga_actual <= restricciones.capacidad)
@@ -237,11 +248,17 @@ def _indices_auxiliares(
     for idx, p in enumerate(paradas):
         pos_de_id.setdefault(p.id, []).append(idx)
     pareja_idx = [-1] * n
+    carga_base = 0
     for idxs in pos_de_id.values():
-        a, b = idxs
-        pareja_idx[a], pareja_idx[b] = b, a
+        if len(idxs) == 2:
+            a, b = idxs
+            pareja_idx[a], pareja_idx[b] = b, a
+        else:
+            # Ya recogido (sólo entrega en `paradas`): ya está a bordo desde el inicio.
+            (idx_e,) = idxs
+            carga_base += restricciones.carga_de(paradas[idx_e].id)
 
-    return es_recogida, r_idx, carga_idx, pareja_idx
+    return es_recogida, r_idx, carga_idx, pareja_idx, carga_base
 
 
 def _tiempo_de_orden(
@@ -253,16 +270,18 @@ def _tiempo_de_orden(
     dt0: np.ndarray,
     mat_t: np.ndarray,
     capacidad: int,
+    carga_base: int = 0,
 ) -> float | None:
     """Tiempo total de completado de un orden fijo según la matriz estática (para
     rankear candidatas de perturbación, no para decidir factibilidad). None si viola
-    capacidad o precedencia."""
+    capacidad o precedencia. `carga_base`: pedidos ya recogidos antes de este cálculo
+    (sólo tienen parada de entrega en `orden`, pareja_idx=-1: sin precedencia que cumplir)."""
 
     n = len(orden)
     visitada = [False] * n
-    t, carga, anterior = 0.0, 0, -1
+    t, carga, anterior = 0.0, carga_base, -1
     for idx in orden:
-        if not es_recogida[idx] and not visitada[pareja_idx[idx]]:
+        if not es_recogida[idx] and pareja_idx[idx] != -1 and not visitada[pareja_idx[idx]]:
             return None
         dt = dt0[idx] if anterior == -1 else mat_t[anterior, idx]
         llegada = t + dt
@@ -285,6 +304,7 @@ def _candidatas_por_perturbacion(
     mat_t: np.ndarray,
     capacidad: int,
     k: int,
+    carga_base: int = 0,
 ) -> list[list[int]]:
     """K candidatas por tiempo de completado (matriz estática): el óptimo del DP más
     swaps adyacentes y reubicaciones de una parada, filtradas por precedencia/capacidad y
@@ -319,11 +339,48 @@ def _candidatas_por_perturbacion(
     puntuadas = []
     for t in candidatas:
         orden = list(t)
-        tiempo = _tiempo_de_orden(orden, es_recogida, r_idx, carga_idx, pareja_idx, dt0, mat_t, capacidad)
+        tiempo = _tiempo_de_orden(
+            orden, es_recogida, r_idx, carga_idx, pareja_idx, dt0, mat_t, capacidad, carga_base,
+        )
         if tiempo is not None:
             puntuadas.append((tiempo, orden))
     puntuadas.sort(key=lambda par: par[0])
     return [orden for _tiempo, orden in puntuadas[:k]]
+
+
+def _arrays_calendario(
+    paradas: list[Parada], restricciones: Restricciones,
+) -> tuple[list[bool], list[float], list[float], list[float], list[int], list[int], int]:
+    """Arrays indexados por posición de parada, precomputados UNA vez por llamada a
+    `verificar_y_calendarizar` (no por iteración del punto fijo ni por parada visitada):
+    evita repetir `restricciones.r_de/l_de/theta_de/carga_de` (dict.get por id de pedido)
+    en el tramo caliente, que con miles de calendarizaciones (camino exacto <=4 pedidos, o
+    K candidatas del camino heurístico) era costo dominante del benchmark (ver HANDOFF).
+    `math.inf` en l/theta significa "sin límite" (evita chequeos `is None` en el loop)."""
+
+    n = len(paradas)
+    es_recogida = [p.tipo == "recogida" for p in paradas]
+    r_idx = [restricciones.r_de(p.id) if es_recogida[i] else 0.0 for i, p in enumerate(paradas)]
+    # ternario explícito (no `or math.inf`): un límite/theta de 0.0 es válido y falsy en Python,
+    # `or` lo reemplazaría incorrectamente por "sin límite".
+    l_idx = [lim if (lim := restricciones.l_de(p.id)) is not None else math.inf for p in paradas]
+    theta_idx = [th if (th := restricciones.theta_de(p.id)) is not None else math.inf for p in paradas]
+    carga_idx = [restricciones.carga_de(p.id) for p in paradas]
+
+    pos_de_id: dict[str, list[int]] = {}
+    for idx, p in enumerate(paradas):
+        pos_de_id.setdefault(p.id, []).append(idx)
+    pareja_idx = [-1] * n
+    carga_base = 0
+    for idxs in pos_de_id.values():
+        if len(idxs) == 2:
+            a, b = idxs
+            pareja_idx[a], pareja_idx[b] = b, a
+        else:
+            (idx_e,) = idxs
+            carga_base += carga_idx[idx_e]
+
+    return es_recogida, r_idx, l_idx, theta_idx, carga_idx, pareja_idx, carga_base
 
 
 def _simular_adelante(
@@ -332,46 +389,50 @@ def _simular_adelante(
     t0: float,
     pos0: tuple[int, int],
     travel_fn: TravelFn,
-    restricciones: Restricciones,
+    es_recogida: list[bool],
+    r_idx: list[float],
+    carga_idx: list[int],
+    capacidad: int,
     pins: dict[int, float],
+    carga_base: int = 0,
 ) -> tuple[list[float], list[float], float] | None:
     """Simula hacia adelante el orden fijo dado, honrando cualquier espera estratégica ya
     fijada en `pins` (parada_idx -> instante mínimo de salida). Devuelve (llegadas, salidas,
     distancia_total) o None si se viola capacidad (no debería pasar: ya se podó por
-    subconjunto, esto es una verificación barata de más)."""
+    subconjunto, esto es una verificación barata de más). `carga_base`: pedidos ya
+    recogidos antes de este cálculo (sólo aparecen con su parada de entrega en `orden`)."""
 
     t, pos = t0, pos0
     dist_total = 0.0
-    carga = 0
+    carga = carga_base
     llegadas = [0.0] * len(orden)
     salidas = [0.0] * len(orden)
 
     for pos_en_orden, idx in enumerate(orden):
-        parada = paradas[idx]
-        dt, dm = travel_fn(pos, parada.pos, t)
+        dt, dm = travel_fn(pos, paradas[idx].pos, t)
         llegada = t + dt
         dist_total += dm
-        if parada.tipo == "recogida":
-            salida = max(llegada, restricciones.r_de(parada.id))
+        if es_recogida[idx]:
+            salida = max(llegada, r_idx[idx])
             if idx in pins:
                 salida = max(salida, pins[idx])
-            carga += restricciones.carga_de(parada.id)
+            carga += carga_idx[idx]
         else:
             salida = llegada
-            carga -= restricciones.carga_de(parada.id)
-        if carga < 0 or carga > restricciones.capacidad:
+            carga -= carga_idx[idx]
+        if carga < 0 or carga > capacidad:
             return None
         llegadas[pos_en_orden] = llegada
         salidas[pos_en_orden] = salida
-        t, pos = salida, parada.pos
+        t, pos = salida, paradas[idx].pos
 
     return llegadas, salidas, dist_total
 
 
 def _cotas_tardias(
     orden: list[int],
-    paradas: list[Parada],
-    restricciones: Restricciones,
+    es_recogida: list[bool],
+    l_idx: list[float],
     llegadas: list[float],
     salidas: list[float],
 ) -> list[float]:
@@ -381,15 +442,13 @@ def _cotas_tardias(
     m = len(orden)
     cotas = [math.inf] * m
     for k in range(m - 1, -1, -1):
-        parada = paradas[orden[k]]
-        cota = math.inf
-        if parada.tipo == "entrega":
-            l = restricciones.l_de(parada.id)
-            if l is not None:
-                cota = l
+        idx = orden[k]
+        cota = math.inf if es_recogida[idx] else l_idx[idx]
         if k < m - 1:
             tramo = llegadas[k + 1] - salidas[k]
-            cota = min(cota, cotas[k + 1] - tramo)
+            cota_prev = cotas[k + 1] - tramo
+            if cota_prev < cota:
+                cota = cota_prev
         cotas[k] = cota
     return cotas
 
@@ -401,6 +460,7 @@ def verificar_y_calendarizar(
     pos0: tuple[int, int],
     travel_fn: TravelFn,
     restricciones: Restricciones,
+    _arrays: tuple | None = None,
 ) -> tuple[list[float], list[float], float] | None:
     """Punto fijo acotado: en cada iteración simula el orden con las esperas estratégicas
     fijadas hasta ahora, checa fechas límite, y para cada pedido cuya frescura lo exija,
@@ -410,63 +470,64 @@ def verificar_y_calendarizar(
 
     Pública (no sólo interna a held_karp): feasibility.py la reutiliza para calcular la
     holgura de frescura restante del plan activo, y los tests la usan para verificar el
-    calendario real (con esperas estratégicas incluidas) de una secuencia devuelta."""
+    calendario real (con esperas estratégicas incluidas) de una secuencia devuelta.
 
-    pos_de_recogida: dict[str, int] = {}
-    pos_de_entrega: dict[str, int] = {}
-    for idx_en_orden, idx in enumerate(orden):
-        parada = paradas[idx]
-        if parada.tipo == "recogida":
-            pos_de_recogida[parada.id] = idx
-        else:
-            pos_de_entrega[parada.id] = idx
+    `_arrays`: salida de `_arrays_calendario(paradas, restricciones)` ya calculada, para
+    quien (como `held_karp`) va a calendarizar MUCHAS órdenes sobre el mismo `paradas` +
+    `restricciones` y no quiere repetir ese cómputo por cada una (era costo dominante del
+    benchmark con miles de candidatas, ver HANDOFF). Uso normal: se omite y se calcula aquí."""
+
+    if _arrays is None:
+        _arrays = _arrays_calendario(paradas, restricciones)
+    es_recogida, r_idx, l_idx, theta_idx, carga_idx, pareja_idx, carga_base = _arrays
+    posicion_de_idx = [0] * len(paradas)
+    for k, idx in enumerate(orden):
+        posicion_de_idx[idx] = k
 
     pins: dict[int, float] = {}
-    # Hueco (T_entrega - S_recogida) que teníamos la última vez que pospusimos ESTE pedido.
-    # Si al volver a medirlo no mejoró, posponer más no va a ayudar: significa que el
-    # retraso se propaga 1:1 hasta la entrega (no hay espera de preparación aguas abajo que
-    # lo absorba), así que el hueco es una CONSTANTE de esta secuencia -- sin esta detección
-    # el punto fijo reintenta indefinidamente hasta el tope de iteraciones (visto en el
-    # benchmark: siempre agotaba las 20, ver ai/reports/HANDOFF.md).
-    gap_previo: dict[str, float] = {}
+    # Hueco (T_entrega - S_recogida) que teníamos la última vez que pospusimos ESTE pedido
+    # (indexado por parada de RECOGIDA). Si al volver a medirlo no mejoró, posponer más no
+    # va a ayudar: significa que el retraso se propaga 1:1 hasta la entrega (no hay espera
+    # de preparación aguas abajo que lo absorba), así que el hueco es una CONSTANTE de esta
+    # secuencia -- sin esta detección el punto fijo reintenta indefinidamente hasta el tope
+    # de iteraciones (visto en el benchmark: siempre agotaba las 20, ver
+    # ai/reports/HANDOFF.md).
+    gap_previo: dict[int, float] = {}
 
     for _ in range(_MAX_ITER_PUNTO_FIJO):
-        resultado = _simular_adelante(orden, paradas, t0, pos0, travel_fn, restricciones, pins)
+        resultado = _simular_adelante(
+            orden, paradas, t0, pos0, travel_fn, es_recogida, r_idx, carga_idx,
+            restricciones.capacidad, pins, carga_base,
+        )
         if resultado is None:
             return None
         llegadas, salidas, dist_total = resultado
 
-        posicion_de_idx = {idx: k for k, idx in enumerate(orden)}
-
         for k, idx in enumerate(orden):
-            parada = paradas[idx]
-            if parada.tipo == "entrega":
-                l = restricciones.l_de(parada.id)
-                if l is not None and llegadas[k] > l + _EPS:
-                    return None
+            if not es_recogida[idx] and llegadas[k] > l_idx[idx] + _EPS:
+                return None
 
-        cotas = _cotas_tardias(orden, paradas, restricciones, llegadas, salidas)
+        cotas = _cotas_tardias(orden, es_recogida, l_idx, llegadas, salidas)
 
         cambio = False
-        for pid, idx_e in pos_de_entrega.items():
-            theta = restricciones.theta_de(pid)
-            if theta is None:
+        for idx_r, idx_e in enumerate(pareja_idx):
+            if not es_recogida[idx_r] or theta_idx[idx_e] == math.inf:
                 continue
-            idx_r = pos_de_recogida[pid]
+            theta = theta_idx[idx_e]
             k_r, k_e = posicion_de_idx[idx_r], posicion_de_idx[idx_e]
             gap_actual = llegadas[k_e] - salidas[k_r]
 
             if gap_actual <= theta + _EPS:
-                gap_previo.pop(pid, None)
+                gap_previo.pop(idx_r, None)
                 continue
 
-            if pid in gap_previo and gap_actual >= gap_previo[pid] - _EPS:
+            if idx_r in gap_previo and gap_actual >= gap_previo[idx_r] - _EPS:
                 return None  # posponer no está reduciendo el hueco: no hay forma de cerrarlo
 
             requerido = llegadas[k_e] - theta
             if requerido > cotas[k_r] + _EPS:
                 return None  # no cabe sin romper una fecha límite aguas abajo
-            gap_previo[pid] = gap_actual
+            gap_previo[idx_r] = gap_actual
             pins[idx_r] = max(pins.get(idx_r, -math.inf), requerido)
             cambio = True
 
@@ -476,16 +537,72 @@ def verificar_y_calendarizar(
     return None
 
 
+def _permutaciones_validas_por_precedencia(paradas: list[Parada]) -> list[list[int]]:
+    """Genera DIRECTAMENTE (backtracking) sólo las permutaciones que respetan
+    recogida-antes-que-entrega por pedido -- no filtra capacidad todavía, eso lo decide
+    `verificar_y_calendarizar` al calendarizar cada una, igual que en el camino heurístico.
+
+    Para n=4 pedidos generar-y-filtrar las 8!=40320 permutaciones con itertools y
+    descartar el 94% costaba más que la propia calendarización; construir sólo las 2520
+    válidas directamente evita ese desperdicio."""
+
+    n = len(paradas)
+    pos_de_id: dict[str, list[int]] = {}
+    for idx, p in enumerate(paradas):
+        pos_de_id.setdefault(p.id, []).append(idx)
+    es_entrega_con_recogida: dict[int, int] = {}  # idx entrega -> idx recogida del mismo pedido
+    for idxs in pos_de_id.values():
+        if len(idxs) != 2:
+            continue  # ya recogido (sólo entrega en `paradas`): sin restricción de precedencia
+        a, b = idxs
+        r_idx, e_idx = (a, b) if paradas[a].tipo == "recogida" else (b, a)
+        es_entrega_con_recogida[e_idx] = r_idx
+
+    resultado: list[list[int]] = []
+    actual: list[int] = []
+    usado = [False] * n
+    recogido = [False] * n
+
+    def backtrack() -> None:
+        if len(actual) == n:
+            resultado.append(actual.copy())
+            return
+        for idx in range(n):
+            if usado[idx]:
+                continue
+            recogida_requerida = es_entrega_con_recogida.get(idx)
+            if recogida_requerida is not None and not recogido[recogida_requerida]:
+                continue
+            usado[idx] = True
+            actual.append(idx)
+            if recogida_requerida is None:
+                recogido[idx] = True
+            backtrack()
+            actual.pop()
+            usado[idx] = False
+            if recogida_requerida is None:
+                recogido[idx] = False
+
+    backtrack()
+    return resultado
+
+
 def held_karp(
     stops, t0, pos0, travel_fn, constraints, k: int = 10,
-) -> tuple[list[int] | None, float, float]:
-    """Devuelve (orden_óptimo, tiempo_total, distancia_total).
-    Si no existe secuencia factible devuelve (None, inf, inf).
+) -> tuple[list[int] | None, float, float, bool, int]:
+    """Devuelve (orden_óptimo, tiempo_total, distancia_total, optimo_exacto, secuencias_evaluadas).
+    Si no existe secuencia factible: (None, inf, inf, optimo_exacto, secuencias_evaluadas).
 
     `stops`: lista de Parada (o dicts con id/tipo/pos), <=12. `constraints`: Restricciones
     (o dict con las mismas claves). `k`: cuántas candidatas por tiempo de completado se
-    intentan calendarizar hacia atrás antes de rendirse (ver módulo, arquitectura de 4
-    pasos). Parametrizable para el escalón de rendimiento bitmask/beam/K de ai/CLAUDE.md.
+    intentan calendarizar hacia atrás antes de rendirse en el camino heurístico (>4
+    pedidos). Parametrizable para el escalón de rendimiento bitmask/beam/K de ai/CLAUDE.md.
+
+    `optimo_exacto`: True si se enumeraron TODAS las secuencias válidas por precedencia
+    (<=4 pedidos) y se devuelve la mejor real -- no una aproximación. `secuencias_evaluadas`:
+    cuántas se calendarizaron para llegar al resultado. Es parte del contrato con el
+    frontend (la UI sólo puede decir "óptimo exacto sobre N secuencias" cuando es cierto):
+    no cambiar sin actualizar ai/CLAUDE.md §5.
     """
 
     global _contador_candidatas_agotadas
@@ -496,12 +613,54 @@ def held_karp(
     restricciones = constraints if isinstance(constraints, Restricciones) else Restricciones(**constraints)
 
     if not paradas:
-        return [], 0.0, 0.0
+        return [], 0.0, 0.0, True, 0
 
     n = len(paradas)
+    n_pedidos = n // 2
+
+    if n_pedidos <= _UMBRAL_EXACTO_PEDIDOS:
+        permutaciones = _permutaciones_validas_por_precedencia(paradas)
+        arrays = _arrays_calendario(paradas, restricciones)
+        es_recogida, r_idx, _l_idx, _theta_idx, carga_idx, _pareja_idx, carga_base = arrays
+        secuencias_evaluadas = len(permutaciones)
+
+        # Poda válida (no heurística: preserva la exactitud): el punto fijo sólo puede
+        # POSPONER recogidas, así que el tiempo final con espera estratégica de cualquier
+        # secuencia es >= su tiempo "naive" (sin esperar a propósito). Una pasada barata
+        # (un solo _simular_adelante, sin punto fijo) ordena todo por esa cota inferior;
+        # sólo se corre la calendarización completa (cara, con punto fijo) mientras la cota
+        # inferior de la candidata siga por debajo de la mejor factible encontrada hasta
+        # ahora. Es lo que evita pagar las 2520 verificaciones completas en el caso típico.
+        candidatas_naive = []
+        for perm in permutaciones:
+            resultado = _simular_adelante(
+                perm, paradas, t0, pos0, travel_fn, es_recogida, r_idx, carga_idx,
+                restricciones.capacidad, {}, carga_base,
+            )
+            if resultado is not None:
+                _llegadas, salidas, _dist = resultado
+                candidatas_naive.append((salidas[-1] - t0, perm))
+        candidatas_naive.sort(key=lambda c: c[0])
+
+        mejor_orden, mejor_tiempo, mejor_dist = None, math.inf, math.inf
+        for cota_inferior, perm in candidatas_naive:
+            if cota_inferior >= mejor_tiempo:
+                break
+            resultado = verificar_y_calendarizar(perm, paradas, t0, pos0, travel_fn, restricciones, arrays)
+            if resultado is not None:
+                _llegadas, salidas, dist_total = resultado
+                tiempo_total = salidas[-1] - t0
+                if tiempo_total < mejor_tiempo:
+                    mejor_orden, mejor_tiempo, mejor_dist = perm, tiempo_total, dist_total
+
+        if mejor_orden is None:
+            _contador_candidatas_agotadas += 1
+            return None, math.inf, math.inf, True, secuencias_evaluadas
+        return mejor_orden, mejor_tiempo, mejor_dist, True, secuencias_evaluadas
+
     mascaras_ok = _mascaras_validas(paradas, restricciones)
     mat_t, mat_d, dt0, dd0 = _matriz_estatica(paradas, t0, pos0, travel_fn)
-    es_recogida, r_idx, carga_idx, pareja_idx = _indices_auxiliares(paradas, restricciones)
+    es_recogida, r_idx, carga_idx, pareja_idx, carga_base = _indices_auxiliares(paradas, restricciones)
 
     dp_time, _dp_dist, dp_prev = _dp_numba(n, dt0, dd0, mat_t, mat_d, es_recogida, r_idx, mascaras_ok)
 
@@ -514,15 +673,18 @@ def held_karp(
         orden_optimo = _reconstruir_numba(dp_prev, n, mejor_ultimo)
         candidatas = _candidatas_por_perturbacion(
             orden_optimo, es_recogida, r_idx, carga_idx, pareja_idx, dt0, mat_t,
-            restricciones.capacidad, k,
+            restricciones.capacidad, k, carga_base,
         )
 
+    arrays = _arrays_calendario(paradas, restricciones)
+    evaluadas = 0
     for orden in candidatas:
-        resultado = verificar_y_calendarizar(orden, paradas, t0, pos0, travel_fn, restricciones)
+        evaluadas += 1
+        resultado = verificar_y_calendarizar(orden, paradas, t0, pos0, travel_fn, restricciones, arrays)
         if resultado is not None:
             _llegadas, salidas, dist_total = resultado
             tiempo_total = salidas[-1] - t0
-            return orden, tiempo_total, dist_total
+            return orden, tiempo_total, dist_total, False, evaluadas
 
     _contador_candidatas_agotadas += 1
-    return None, math.inf, math.inf
+    return None, math.inf, math.inf, False, evaluadas

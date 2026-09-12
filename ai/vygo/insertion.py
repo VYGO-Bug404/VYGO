@@ -30,6 +30,9 @@ class OfertaCandidata:
     theta: Optional[float]
     carga: int = 1
     expira_en: Optional[float] = None
+    precio: Optional[float] = None
+    anillo: Optional[int] = None
+    p_gana_estimada: Optional[float] = None
 
 
 @dataclass(slots=True)
@@ -51,7 +54,7 @@ def _clave_plan(plan: list[Parada], t: float) -> tuple:
     return (round(t, 3), tuple((p.id, p.tipo) for p in plan))
 
 
-def baseline_plan(estado: EstadoRuta) -> tuple[list[int] | None, float, float]:
+def baseline_plan(estado: EstadoRuta) -> tuple[list[int] | None, float, float, bool, int]:
     """held_karp(estado.plan) solo, cacheado en estado.cache. Pública para que
     feasibility.py reuse el mismo resultado (evita recalcular por cada una de las hasta 8
     ofertas Y por el chequeo de holgura de frescura del propio plan)."""
@@ -81,7 +84,7 @@ def eval_insertion(
     if len(plan) + 2 > _MAX_STOPS_TOTAL:
         return math.inf, math.inf, False
 
-    _orden_base, tiempo_base, dist_base = baseline_plan(estado)
+    _orden_base, tiempo_base, dist_base, _exacto_base, _eval_base = baseline_plan(estado)
     if _orden_base is None and plan:
         # El plan activo ya comprometido debería ser siempre factible por invariante; si no
         # lo es, no hay una base contra la cual medir el delta.
@@ -94,7 +97,7 @@ def eval_insertion(
     stops_combinado.append({"id": oferta.id, "tipo": "entrega", "pos": oferta.pos_entrega})
     restricciones_combinadas = _restricciones_con_oferta(estado.restricciones, oferta)
 
-    orden_nuevo, tiempo_nuevo, dist_nuevo = held_karp(
+    orden_nuevo, tiempo_nuevo, dist_nuevo, _exacto, _evaluadas = held_karp(
         stops_combinado, estado.t, estado.pos, estado.travel_fn, restricciones_combinadas,
     )
     if orden_nuevo is None:

@@ -16,19 +16,17 @@ from __future__ import annotations
 
 import numpy as np
 
-from vygo.schema import Clima, Vehiculo, VEHICULOS
+from vygo.schema import CLIMA_SIMULABLE, Clima, Vehiculo, VEHICULOS
+from vygo.weather import ParametrosClima
 
 SEGUNDOS_DIA = 86400.0
 
-# Multiplicador de clima (γ_w) -- constante en el tiempo, escala directa del tiempo de viaje.
-# Valores en línea con docs/modelo-matematico.md §5.3, extendidos a los 5 climas simulables
-# de vygo.schema.CLIMA_SIMULABLE.
+# Multiplicador de clima (γ_w) -- constante en el tiempo, escala directa del tiempo de
+# viaje. Fuente única: config/clima.yaml (vygo.weather), para no tener dos copias del
+# mismo número que se puedan desincronizar.
+_INDICE_DE_CLIMA = {c: i for i, c in enumerate(CLIMA_SIMULABLE)}
 CLIMA_MULT: dict[Clima, float] = {
-    Clima.DESPEJADO: 1.00,
-    Clima.NUBLADO: 1.05,
-    Clima.LLUVIA: 1.15,
-    Clima.LLUVIA_FUERTE: 1.30,
-    Clima.TORMENTA: 1.50,
+    c: float(ParametrosClima.desde_yaml().mult_tiempo_viaje[i]) for c, i in _INDICE_DE_CLIMA.items()
 }
 
 
