@@ -41,7 +41,7 @@ function savePosition(lng: number, lat: number) {
 }
 
 const PLATFORM_COLORS: Record<string, string> = {
-  uber: '#FFFFFF',
+  uber: '#334155',
   rappi: '#EF4444',
   didi: '#F97316',
 }
@@ -51,9 +51,9 @@ const KEY = import.meta.env.VITE_MAPTILER_KEY
 function buildStyle(): StyleSpecification {
   // Raster tiles — simpler and more reliable than fetching a style JSON
   const tiles = KEY
-    ? [`https://api.maptiler.com/maps/dataviz-dark/{z}/{x}/{y}.png?key=${KEY}`]
+    ? [`https://api.maptiler.com/maps/dataviz/{z}/{x}/{y}.png?key=${KEY}`]
     : [
-        'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}',
+        'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}',
       ]
 
   return {
@@ -130,14 +130,14 @@ export function MockMap({
             type: 'line',
             source: 'route',
             layout: { 'line-cap': 'round', 'line-join': 'round' },
-            paint: { 'line-color': '#0B1215', 'line-width': 8, 'line-opacity': 0.6 },
+            paint: { 'line-color': '#FFFFFF', 'line-width': 8, 'line-opacity': 0.5 },
           })
           map!.addLayer({
             id: 'route-line',
             type: 'line',
             source: 'route',
             layout: { 'line-cap': 'round', 'line-join': 'round' },
-            paint: { 'line-color': '#00C875', 'line-width': 4 },
+            paint: { 'line-color': '#6FA800', 'line-width': 4 },
           })
           setReady(true)
         })
@@ -193,25 +193,25 @@ export function MockMap({
         pickupEl.style.cssText = 'cursor:pointer;'
 
         if (isFirst) {
-          // Círculo verde
+          // Círculo lima
           pickupEl.innerHTML = `
-            <div style="width:34px;height:34px;background:#11191D;border:2.5px solid #00C875;
+            <div style="width:34px;height:34px;background:#FFFFFF;border:2.5px solid #6FA800;
               border-radius:50%;display:flex;align-items:center;justify-content:center;
-              font-family:Inter,sans-serif;font-weight:700;font-size:13px;color:#00C875;
-              box-shadow:0 2px 12px rgba(0,200,117,0.4);">
+              font-family:Inter,sans-serif;font-weight:700;font-size:13px;color:#6FA800;
+              box-shadow:0 2px 12px rgba(111,168,0,0.35);">
               ${num}
             </div>`
         } else {
-          // Triángulo verde (SVG)
+          // Triángulo lima (SVG)
           pickupEl.innerHTML = `
             <div style="position:relative;width:36px;height:34px;display:flex;
               align-items:center;justify-content:center;">
               <svg width="36" height="34" viewBox="0 0 36 34" style="position:absolute;top:0;left:0;">
-                <polygon points="18,2 1,33 35,33" fill="#11191D"
-                  stroke="#00C875" stroke-width="2.5" stroke-linejoin="round"/>
+                <polygon points="18,2 1,33 35,33" fill="#FFFFFF"
+                  stroke="#6FA800" stroke-width="2.5" stroke-linejoin="round"/>
               </svg>
               <span style="position:relative;z-index:1;font-family:Inter,sans-serif;
-                font-weight:700;font-size:12px;color:#00C875;margin-top:8px;">${num}</span>
+                font-weight:700;font-size:12px;color:#6FA800;margin-top:8px;">${num}</span>
             </div>`
         }
 
@@ -225,12 +225,12 @@ export function MockMap({
       const dropoffEl = document.createElement('div')
       dropoffEl.style.cssText = 'cursor:pointer;'
       dropoffEl.innerHTML = `
-        <div style="min-width:38px;height:26px;background:#F5A524;
-          border-radius:13px;border:2px solid #0B1215;
+        <div style="min-width:38px;height:26px;background:#C87000;
+          border-radius:13px;border:2px solid #FFFFFF;
           display:flex;align-items:center;justify-content:center;
           padding:0 10px;
-          font-family:Inter,sans-serif;font-weight:700;font-size:12px;color:#0B1215;
-          box-shadow:0 2px 12px rgba(245,165,36,0.45);">
+          font-family:Inter,sans-serif;font-weight:700;font-size:12px;color:#FFFFFF;
+          box-shadow:0 2px 12px rgba(200,112,0,0.4);">
           ${num}
         </div>`
 
@@ -249,8 +249,8 @@ export function MockMap({
     const el = document.createElement('div')
     el.style.cssText = 'width:24px;height:24px;position:relative;'
     el.innerHTML = `
-      <div style="position:absolute;inset:0;background:#00C875;border-radius:50%;opacity:0.3;animation:ping 2s cubic-bezier(0,0,0.2,1) infinite;"></div>
-      <div style="position:absolute;inset:4px;background:#00C875;border-radius:50%;border:2.5px solid #0B1215;box-shadow:0 0 8px rgba(0,200,117,0.5);"></div>
+      <div style="position:absolute;inset:0;background:#6FA800;border-radius:50%;opacity:0.3;animation:ping 2s cubic-bezier(0,0,0.2,1) infinite;"></div>
+      <div style="position:absolute;inset:4px;background:#6FA800;border-radius:50%;border:2.5px solid #FFFFFF;box-shadow:0 0 8px rgba(111,168,0,0.5);"></div>
     `
 
     const marker = new Marker({ element: el, anchor: 'center' })
@@ -290,7 +290,7 @@ export function MockMap({
   }, [ready])
 
   return (
-    <div className={cn('relative overflow-hidden bg-[#0B1215]', className)}>
+    <div className={cn('relative overflow-hidden bg-[#dde3f0]', className)}>
       <div ref={wrapRef} className="w-full h-full" />
 
       {/* Error state */}
