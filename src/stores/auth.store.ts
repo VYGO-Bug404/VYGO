@@ -92,6 +92,9 @@ export const useAuthStore = create<AuthStore>()(
             phone: data.session.user.phone ?? null,
             userId: data.session.user.id,
           })
+        } else {
+          // No valid Supabase session — clear any stale persisted state
+          set({ isAuthenticated: false, email: null, phone: null, userId: null })
         }
       },
     }),
