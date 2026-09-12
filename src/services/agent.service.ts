@@ -174,6 +174,10 @@ export async function decidir(
 
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const data: RespuestaDecidir = await res.json()
+      console.log(
+        `%c[VYGO Agent] ✅ agente_ppo · ${data.latencia_ms}ms · ${data.decisiones[0]?.decision} · ${data.decisiones[0]?.explicacion_corta}`,
+        'color:#6FA800;font-weight:bold'
+      )
       return { ...data, _source: 'agent' }
     } catch (err) {
       console.warn('[VYGO Agent] caída a B2:', err)
