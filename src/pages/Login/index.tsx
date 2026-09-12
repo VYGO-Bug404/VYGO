@@ -9,7 +9,7 @@ type Step = 'main' | 'email'
 
 export function LoginPage() {
   const navigate = useNavigate()
-  const { signInWithApple, signInWithGoogle, login } = useAuthStore()
+  const { signInWithGoogle, login } = useAuthStore()
 
   const [step, setStep] = useState<Step>('main')
   const [loading, setLoading] = useState(false)
@@ -38,7 +38,6 @@ export function LoginPage() {
     }
   }
 
-  const handleApple = () => withLoader(() => signInWithApple())
   const handleGoogle = () => withLoader(() => signInWithGoogle())
 
   const handleEmailLogin = () =>
@@ -71,13 +70,6 @@ export function LoginPage() {
           {errorMsg && <ErrorBanner msg={errorMsg} onClose={clearError} />}
 
           <div className="flex flex-col gap-3">
-            <SocialButton
-              onClick={handleApple}
-              loading={loading}
-              icon={<AppleLogo />}
-              label="Continuar con Apple"
-              className="bg-white text-black hover:bg-gray-100"
-            />
             <SocialButton
               onClick={handleGoogle}
               loading={loading}
@@ -219,14 +211,6 @@ function VygoLogo() {
       <span className="text-[42px] font-black tracking-[-2px] text-vygo-white leading-none select-none">VY</span>
       <span className="text-[42px] font-black tracking-[-2px] text-vygo-green leading-none select-none">GO</span>
     </div>
-  )
-}
-
-function AppleLogo() {
-  return (
-    <svg width="17" height="20" viewBox="0 0 814 1000" fill="currentColor">
-      <path d="M788.1 340.9c-5.8 4.5-108.2 62.2-108.2 190.5 0 148.4 130.3 200.9 134.2 202.2-.6 3.2-20.7 71.9-68.7 141.9-42.8 61.6-87.5 123.1-155.5 123.1s-85.5-39.5-164-39.5c-76 0-103.7 40.8-165.9 40.8s-105-37.3-161.1-100.6C149.1 680.2 111.4 582 111.4 488.7c0-160.8 104.3-245.7 206.4-245.7 58.2 0 106.7 37.3 143.5 37.3 35.5 0 90.3-39.5 155.4-39.5 24.7 0 108.2 2.6 168.6 74.3zm-209.7-220c28.5-35 48.7-83.8 48.7-132.6 0-6.5-.6-13.1-1.9-18.3-45.6 1.9-99.4 30.4-131.8 70.6-25.1 29.1-48.7 77.9-48.7 127.4 0 7.1 1.3 14.3 1.9 16.6 3.2.6 8.4 1.3 13.6 1.3 40.8 0 92.1-26.5 118.2-65z"/>
-    </svg>
   )
 }
 
