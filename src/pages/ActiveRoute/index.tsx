@@ -194,20 +194,20 @@ export function ActiveRoutePage() {
           className="absolute left-3 z-20 pointer-events-none"
           style={{ top: `calc(max(env(safe-area-inset-top, 0px), 12px) + 76px)` }}
         >
-          <div className="bg-black/60 backdrop-blur-sm rounded-xl px-2.5 py-2 border border-vygo-border flex flex-col gap-1.5">
+          <div className="bg-white/90 backdrop-blur-sm rounded-xl px-2.5 py-2 border border-vygo-border flex flex-col gap-1.5 shadow-card">
             <div className="flex items-center gap-2">
-              <div className="w-4 h-4 rounded-full bg-vygo-card border-2 border-vygo-green flex-shrink-0" />
-              <span className="text-[11px] text-vygo-secondary">Recoger #1</span>
+              <div className="w-4 h-4 rounded-full bg-white border-2 border-vygo-green flex-shrink-0" />
+              <span className="text-[11px] text-vygo-white">Recoger #1</span>
             </div>
             <div className="flex items-center gap-2">
               <svg width="14" height="13" viewBox="0 0 36 34" className="flex-shrink-0">
-                <polygon points="18,2 1,33 35,33" fill="#11191D" stroke="#00C875" strokeWidth="3" strokeLinejoin="round"/>
+                <polygon points="18,2 1,33 35,33" fill="white" stroke="#6FA800" strokeWidth="3" strokeLinejoin="round"/>
               </svg>
-              <span className="text-[11px] text-vygo-secondary">Recoger extra</span>
+              <span className="text-[11px] text-vygo-white">Recoger extra</span>
             </div>
             <div className="flex items-center gap-2">
               <div className="w-5 h-3 rounded-full bg-vygo-warning flex-shrink-0" />
-              <span className="text-[11px] text-vygo-secondary">Entregar</span>
+              <span className="text-[11px] text-vygo-white">Entregar</span>
             </div>
           </div>
         </div>
