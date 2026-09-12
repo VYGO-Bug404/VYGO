@@ -185,6 +185,7 @@ export function ActiveRoutePage() {
         activeOrders={activeOrders}
         className="absolute inset-0 w-full h-full rounded-none"
         showFullRoute
+        followDriver
       />
 
       {/* LEYENDA — debajo del banner, esquina izquierda */}

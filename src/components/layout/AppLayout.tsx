@@ -4,10 +4,12 @@ import { NewOrderSheet } from '@/components/orders/NewOrderSheet'
 import { useOrdersStore } from '@/stores/orders.store'
 import { useDriverStore } from '@/stores/driver.store'
 import { useNewOrder } from '@/hooks/useNewOrder'
+import { useLocationTracking } from '@/hooks/useLocationTracking'
 import { Zap } from 'lucide-react'
 
 export function AppLayout() {
   useNewOrder()
+  useLocationTracking()
 
   const location = useLocation()
   const isRouteScreen = location.pathname === '/route'

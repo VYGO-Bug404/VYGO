@@ -20,6 +20,7 @@ interface MockMapProps {
   routeGeoJSON?: RouteGeoJSON | null
   className?: string
   showFullRoute?: boolean
+  followDriver?: boolean
 }
 
 const MONTERREY: [number, number] = [-100.3161, 25.6866]
@@ -62,6 +63,7 @@ export function MockMap({
   routeGeoJSON,
   className,
   showFullRoute = false,
+  followDriver = false,
 }: MockMapProps) {
   const wrapRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<MLMap | null>(null)
@@ -239,7 +241,13 @@ export function MockMap({
 
     if (navigator.geolocation) {
       watchRef.current = navigator.geolocation.watchPosition(
-        (pos) => marker.setLngLat([pos.coords.longitude, pos.coords.latitude]),
+        (pos) => {
+          const lngLat: [number, number] = [pos.coords.longitude, pos.coords.latitude]
+          marker.setLngLat(lngLat)
+          if (followDriver && mapRef.current) {
+            mapRef.current.easeTo({ center: lngLat, duration: 800, essential: true })
+          }
+        },
         () => {},
         { enableHighAccuracy: true, maximumAge: 3000 }
       )
