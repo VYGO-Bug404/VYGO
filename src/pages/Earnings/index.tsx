@@ -5,13 +5,35 @@ import { EarningsChart } from '@/components/earnings/EarningsChart'
 import { PlatformBadge } from '@/components/PlatformBadge'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { earningsService } from '@/services/earnings.service'
+import { useDriverStore } from '@/stores/driver.store'
+import { useOrdersStore } from '@/stores/orders.store'
 import { formatCurrency, formatDistance, formatMinutes } from '@/lib/utils'
 import { cn } from '@/lib/utils'
-import type { Platform } from '@/types/order'
+import type { Platform, Order } from '@/types/order'
+import type { PlatformEarning } from '@/types/earnings'
 
 export function EarningsPage() {
   const [period, setPeriod] = useState<'today' | 'week' | 'month'>('today')
-  const summary = earningsService.getSummary(period)
+  const todayEarnings = useDriverStore((s) => s.todayEarnings)
+  const earningsPerHour = useDriverStore((s) => s.earningsPerHour)
+  const completedOrders = useDriverStore((s) => s.completedOrders)
+  const completedOrdersList = useOrdersStore((s) => s.completedOrders)
+
+  const mockSummary = earningsService.getSummary(period)
+
+  // For "today", use live store data; week/month use mock data
+  const summary = period === 'today'
+    ? {
+        ...mockSummary,
+        total: todayEarnings,
+        perHour: earningsPerHour,
+        totalOrders: completedOrders,
+        // Recalculate platform breakdown from completed orders if we have any real ones
+        byPlatform: completedOrdersList.length > 0
+          ? buildPlatformBreakdown(completedOrdersList)
+          : mockSummary.byPlatform,
+      }
+    : mockSummary
 
   const changeIsPositive = summary.changePercent >= 0
 
@@ -177,6 +199,23 @@ export function EarningsPage() {
       </div>
     </div>
   )
+}
+
+function buildPlatformBreakdown(orders: Order[]): PlatformEarning[] {
+  const map: Record<string, { earnings: number; km: number; count: number }> = {}
+  for (const o of orders) {
+    if (!map[o.platform]) map[o.platform] = { earnings: 0, km: 0, count: 0 }
+    map[o.platform].earnings += o.earnings
+    map[o.platform].km += o.distanceKm
+    map[o.platform].count += 1
+  }
+  return Object.entries(map).map(([platform, d]) => ({
+    platform,
+    totalEarnings: d.earnings,
+    totalOrders: d.count,
+    earningsPerKm: d.km > 0 ? d.earnings / d.km : 0,
+    avgPerOrder: d.count > 0 ? d.earnings / d.count : 0,
+  }))
 }
 
 function EarningMetric({ value, label, highlight = false }: { value: string; label: string; highlight?: boolean }) {

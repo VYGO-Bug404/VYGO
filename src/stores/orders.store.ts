@@ -57,6 +57,10 @@ export const useOrdersStore = create<OrdersStore>((set, get) => ({
         const order = state.activeOrders.find((o) => o.id === id)
         const delivered = order ? { ...order, status: 'delivered' as const, deliveredAt: new Date() } : null
         const remaining = state.activeOrders.filter((o) => o.id !== id)
+        if (order) {
+          useDriverStore.getState().addEarnings(order.earnings)
+          useDriverStore.getState().incrementCompletedOrders()
+        }
         if (remaining.length === 0) {
           useDriverStore.getState().setStatus('online')
         }

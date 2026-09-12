@@ -6,9 +6,11 @@ interface DriverStore extends Omit<DriverState, 'activeMinutes'> {
   startShift: () => void
   endShift: () => void
   setStatus: (status: DriverStatus) => void
+  addEarnings: (amount: number) => void
+  incrementCompletedOrders: () => void
 }
 
-export const useDriverStore = create<DriverStore>((set) => ({
+export const useDriverStore = create<DriverStore>((set, get) => ({
   driver: driverService.getDriver(),
   status: 'offline',
   todayEarnings: driverService.getTodayEarnings(),
@@ -29,4 +31,17 @@ export const useDriverStore = create<DriverStore>((set) => ({
     }),
 
   setStatus: (status) => set({ status }),
+
+  addEarnings: (amount: number) =>
+    set((state) => {
+      const newEarnings = state.todayEarnings + amount
+      const shiftMinutes = state.shiftStartedAt
+        ? (Date.now() - state.shiftStartedAt.getTime()) / 60000
+        : 60
+      const newPerHour = Math.round(newEarnings / Math.max(shiftMinutes / 60, 0.25))
+      return { todayEarnings: newEarnings, earningsPerHour: newPerHour }
+    }),
+
+  incrementCompletedOrders: () =>
+    set((state) => ({ completedOrders: state.completedOrders + 1 })),
 }))
