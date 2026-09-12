@@ -23,6 +23,7 @@ export const ordersService = {
       id: `order-${generateId()}`,
       status: 'offered',
       createdAt: new Date(),
+      expiresAt: new Date(Date.now() + 30_000), // 30s to decide
     }
   },
 

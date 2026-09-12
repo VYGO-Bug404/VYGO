@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { useDriverStore } from '@/stores/driver.store'
 import { useOrdersStore } from '@/stores/orders.store'
 import { useEndShift } from '@/hooks/useEndShift'
+import { useCountUp } from '@/hooks/useCountUp'
 import { EndShiftConfirm } from '@/components/EndShiftConfirm'
 import { DriverStatusBadge } from '@/components/DriverStatusBadge'
 import { MockMap } from '@/components/maps/MockMap'
@@ -20,8 +21,15 @@ export function HomePage() {
   const activeOrders = useOrdersStore((s) => s.activeOrders)
   const { tryEndShift, confirming, confirmEnd, cancelConfirm } = useEndShift()
 
+  // #8 — Animated earnings counter
+  const animatedEarnings = useCountUp(todayEarnings)
+  const animatedOrders = useCountUp(completedOrders)
+
   const isOnline = driverStatus !== 'offline'
   const nextOrder = activeOrders[0] ?? null
+
+  // #7 — Smaller map when offline so CTA is more prominent
+  const mapHeight = isOnline ? 'h-[360px]' : 'h-[200px]'
 
   return (
     <div className="flex flex-col min-h-full">
@@ -50,58 +58,57 @@ export function HomePage() {
       <div className="relative">
         <MockMap
           activeOrders={activeOrders}
-          className="h-[360px] w-full rounded-none"
+          className={`${mapHeight} w-full rounded-none transition-all duration-500`}
           showFullRoute={isOnline}
         />
 
         {/* Metrics HUD — floats at bottom of map */}
-        <div className="absolute bottom-0 left-0 right-0 px-3 pb-3">
-          <div className="bg-vygo-bg/85 backdrop-blur-xl border border-vygo-border rounded-2xl px-4 py-3 flex items-center">
-            {/* Earnings */}
-            <div className="flex-1 flex flex-col items-center">
-              <div className="flex items-center gap-1.5">
-                <span className="text-xl font-bold text-vygo-green text-money">
-                  {formatCurrency(todayEarnings)}
-                </span>
-                <span className="flex items-center gap-0.5 text-[10px] font-semibold text-vygo-green bg-vygo-green/10 px-1.5 py-0.5 rounded-full">
-                  <TrendingUp size={9} />
-                  12%
-                </span>
+        {isOnline && (
+          <div className="absolute bottom-0 left-0 right-0 px-3 pb-3">
+            <div className="bg-vygo-bg/85 backdrop-blur-xl border border-vygo-border rounded-2xl px-4 py-3 flex items-center">
+              <div className="flex-1 flex flex-col items-center">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xl font-bold text-vygo-green text-money">
+                    {formatCurrency(animatedEarnings)}
+                  </span>
+                  <span className="flex items-center gap-0.5 text-[10px] font-semibold text-vygo-green bg-vygo-green/10 px-1.5 py-0.5 rounded-full">
+                    <TrendingUp size={9} />
+                    12%
+                  </span>
+                </div>
+                <span className="text-[11px] text-vygo-secondary mt-0.5">Hoy</span>
               </div>
-              <span className="text-[11px] text-vygo-secondary mt-0.5">Hoy</span>
-            </div>
 
-            <div className="w-px h-8 bg-vygo-border mx-1" />
+              <div className="w-px h-8 bg-vygo-border mx-1" />
 
-            {/* Orders */}
-            <div className="flex-1 flex flex-col items-center">
-              <span className="text-xl font-bold text-vygo-white">{completedOrders}</span>
-              <span className="text-[11px] text-vygo-secondary mt-0.5">Pedidos</span>
-            </div>
+              <div className="flex-1 flex flex-col items-center">
+                <span className="text-xl font-bold text-vygo-white">{animatedOrders}</span>
+                <span className="text-[11px] text-vygo-secondary mt-0.5">Pedidos</span>
+              </div>
 
-            <div className="w-px h-8 bg-vygo-border mx-1" />
+              <div className="w-px h-8 bg-vygo-border mx-1" />
 
-            {/* Per hour */}
-            <div className="flex-1 flex flex-col items-center">
-              <span className="text-xl font-bold text-vygo-white text-money">${earningsPerHour}/h</span>
-              <span className="text-[11px] text-vygo-secondary mt-0.5">Rendimiento</span>
+              <div className="flex-1 flex flex-col items-center">
+                <span className="text-xl font-bold text-vygo-white text-money">${earningsPerHour}/h</span>
+                <span className="text-[11px] text-vygo-secondary mt-0.5">Rendimiento</span>
+              </div>
             </div>
           </div>
-        </div>
+        )}
       </div>
 
       {/* ── Content ── */}
       <div className="flex-1 flex flex-col px-4 pt-4 pb-2 gap-3">
 
         {!isOnline ? (
-          /* ── Offline CTA ── */
-          <div className="flex-1 flex flex-col justify-center gap-4 py-4">
-            <div className="flex flex-col gap-1">
-              <p className="text-lg font-semibold text-vygo-white">
+          /* ── Offline CTA — map is small, CTA is the star ── */
+          <div className="flex-1 flex flex-col justify-center gap-5 py-2">
+            <div className="flex flex-col gap-2">
+              <p className="text-2xl font-bold text-vygo-white leading-tight">
                 Listo para comenzar
               </p>
               <p className="text-sm text-vygo-secondary leading-relaxed">
-                Activa tu jornada y VYGO analiza cada pedido automáticamente.
+                Activa tu jornada y VYGO analiza cada pedido automáticamente para maximizar tus ganancias.
               </p>
             </div>
             <Button onClick={startShift} size="xl" className="w-full h-14 text-base font-semibold">
@@ -124,7 +131,6 @@ export function HomePage() {
               )}
             </div>
 
-            {/* Order card */}
             <Link to="/route" className="block bg-vygo-card border border-vygo-border rounded-2xl p-4 hover:border-vygo-green/30 transition-colors active:scale-[0.99]">
               <div className="flex items-start justify-between mb-2">
                 <div className="flex items-center gap-2">
@@ -153,7 +159,6 @@ export function HomePage() {
               </div>
             </Link>
 
-            {/* Other platforms in route */}
             {activeOrders.length > 1 && (
               <div className="flex items-center gap-2 px-1">
                 <div className="flex items-center gap-1.5">
@@ -174,13 +179,20 @@ export function HomePage() {
           </div>
 
         ) : (
-          /* ── Online, waiting ── */
-          <div className="flex-1 flex flex-col items-center justify-center gap-3 py-6">
-            <div className="w-10 h-10 rounded-full border border-vygo-green/30 flex items-center justify-center">
-              <Zap size={18} className="text-vygo-green" />
+          /* ── #4 Online, waiting — radar animation ── */
+          <div className="flex-1 flex flex-col items-center justify-center gap-4 py-6">
+            <div className="relative w-20 h-20 flex items-center justify-center">
+              {/* Radar rings */}
+              <span className="absolute inset-0 rounded-full border border-vygo-green/20 animate-ping" style={{ animationDuration: '2s' }} />
+              <span className="absolute inset-2 rounded-full border border-vygo-green/25 animate-ping" style={{ animationDuration: '2s', animationDelay: '0.4s' }} />
+              <span className="absolute inset-4 rounded-full border border-vygo-green/35 animate-ping" style={{ animationDuration: '2s', animationDelay: '0.8s' }} />
+              {/* Center icon */}
+              <div className="absolute inset-6 rounded-full bg-vygo-green/10 border border-vygo-green/30 flex items-center justify-center">
+                <Zap size={16} className="text-vygo-green" />
+              </div>
             </div>
             <div className="text-center">
-              <p className="text-sm font-semibold text-vygo-white mb-1">Buscando el mejor pedido</p>
+              <p className="text-base font-semibold text-vygo-white mb-1">Buscando el mejor pedido</p>
               <p className="text-xs text-vygo-secondary max-w-[200px] leading-relaxed">
                 VYGO solo te muestra pedidos que mejoran tus ganancias.
               </p>

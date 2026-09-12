@@ -233,7 +233,14 @@ export function ActiveRoutePage() {
               </span>
             </div>
             {destination && (
-              <p className="text-xs text-vygo-secondary truncate pl-4">{destination}</p>
+              <p className="text-xs text-vygo-secondary truncate pl-4">
+                {destination}
+                {primaryOrder?.estimatedMinutes && (
+                  <span className="text-vygo-green font-semibold ml-1.5">
+                    · ~{primaryOrder.estimatedMinutes} min
+                  </span>
+                )}
+              </p>
             )}
           </div>
           {/* En vivo badge */}

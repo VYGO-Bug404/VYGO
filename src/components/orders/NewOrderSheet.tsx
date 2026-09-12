@@ -1,7 +1,6 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { X, MapPin, Navigation, Zap, Shield, CheckCircle2 } from 'lucide-react'
 import { useOrdersStore } from '@/stores/orders.store'
-import { useDriverStore } from '@/stores/driver.store'
 import { PlatformBadge } from '@/components/PlatformBadge'
 import { Button } from '@/components/ui/button'
 import { formatCurrency, formatDistance, formatMinutes } from '@/lib/utils'
@@ -10,18 +9,38 @@ import { decidir, politicaLabel } from '@/services/agent.service'
 import type { RespuestaDecidir, DecisionOferta } from '@/lib/vygoAgent'
 import type { Order } from '@/types/order'
 
+const TOTAL_SECONDS = 30
+const SWIPE_THRESHOLD = 75
+
 interface NewOrderSheetProps {
   order: Order
 }
 
 export function NewOrderSheet({ order }: NewOrderSheetProps) {
   const [accepting, setAccepting] = useState(false)
+  const [accepted, setAccepted] = useState(false)
   const [agentResp, setAgentResp] = useState<(RespuestaDecidir & { _source: string }) | null>(null)
   const [loading, setLoading] = useState(true)
+  const [secondsLeft, setSecondsLeft] = useState(() => {
+    if (!order.expiresAt) return TOTAL_SECONDS
+    return Math.max(0, Math.floor((order.expiresAt.getTime() - Date.now()) / 1000))
+  })
+  const touchStartY = useRef<number | null>(null)
   const acceptOffer = useOrdersStore((s) => s.acceptOffer)
   const rejectOffer = useOrdersStore((s) => s.rejectOffer)
   const rhoActual = useOrdersStore((s) => s.currentEarningsPerHour)
-  const shiftStartedAt = useDriverStore((s) => s.shiftStartedAt)
+
+  // #1 — Countdown timer
+  useEffect(() => {
+    if (secondsLeft <= 0) { rejectOffer(); return }
+    const id = setInterval(() => {
+      setSecondsLeft((s) => {
+        if (s <= 1) { rejectOffer(); return 0 }
+        return s - 1
+      })
+    }, 1000)
+    return () => clearInterval(id)
+  }, [])
 
   useEffect(() => {
     setLoading(true)
@@ -35,13 +54,23 @@ export function NewOrderSheet({ order }: NewOrderSheetProps) {
   const eco = dec?.economia
   const riesgo = dec?.riesgo
   const recomienda = dec?.decision === 'aceptar'
-  const shiftMinutes = shiftStartedAt
-    ? Math.floor((Date.now() - shiftStartedAt.getTime()) / 60000)
-    : 0
 
+  // #9 — Swipe down to reject
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartY.current = e.touches[0].clientY
+  }
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (touchStartY.current === null) return
+    const delta = e.changedTouches[0].clientY - touchStartY.current
+    if (delta > SWIPE_THRESHOLD) rejectOffer()
+    touchStartY.current = null
+  }
+
+  // #6 — Accept feedback
   const handleAccept = async () => {
     setAccepting(true)
-    await new Promise((r) => setTimeout(r, 250))
+    setAccepted(true)
+    await new Promise((r) => setTimeout(r, 600))
     acceptOffer(order)
   }
 
@@ -52,11 +81,40 @@ export function NewOrderSheet({ order }: NewOrderSheetProps) {
       <div
         className="relative w-full max-w-[430px] bg-vygo-card rounded-t-3xl shadow-sheet animate-slide-up overflow-hidden"
         style={{ maxHeight: '94dvh' }}
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
       >
+        {/* #6 — Accept flash overlay */}
+        {accepted && (
+          <div className="absolute inset-0 z-50 flex items-center justify-center bg-vygo-green/20 animate-fade-in pointer-events-none">
+            <div className="w-20 h-20 rounded-full bg-vygo-green flex items-center justify-center shadow-lg">
+              <CheckCircle2 size={40} className="text-vygo-bg" strokeWidth={2.5} />
+            </div>
+          </div>
+        )}
+
         <div className="overflow-y-auto scrollbar-none" style={{ maxHeight: '94dvh' }}>
-          {/* Handle */}
-          <div className="flex justify-center pt-3 pb-1">
+          {/* Handle + countdown timer */}
+          <div className="flex flex-col items-center pt-3 pb-1 gap-2">
             <div className="w-10 h-1 rounded-full bg-vygo-border" />
+            {/* #1 — Countdown bar */}
+            <div className="w-full px-5">
+              <div className="h-1 bg-vygo-border rounded-full overflow-hidden">
+                <div
+                  className={cn(
+                    'h-full rounded-full transition-all duration-1000 ease-linear',
+                    secondsLeft > 15 ? 'bg-vygo-green' : secondsLeft > 7 ? 'bg-vygo-warning' : 'bg-vygo-danger'
+                  )}
+                  style={{ width: `${(secondsLeft / TOTAL_SECONDS) * 100}%` }}
+                />
+              </div>
+              <p className={cn(
+                'text-[10px] text-right mt-0.5 font-medium',
+                secondsLeft > 15 ? 'text-vygo-secondary' : secondsLeft > 7 ? 'text-vygo-warning' : 'text-vygo-danger'
+              )}>
+                {secondsLeft}s
+              </p>
+            </div>
           </div>
 
           {/* Header: plataforma + policy badge */}

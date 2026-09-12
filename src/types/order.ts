@@ -22,6 +22,7 @@ export interface Order {
   id: string
   orderNumber: string
   routeNumber?: number   // stable position in route (never renumbers)
+  expiresAt?: Date       // when the offer expires (auto-reject)
   platform: Platform
   restaurantName: string
   earnings: number
