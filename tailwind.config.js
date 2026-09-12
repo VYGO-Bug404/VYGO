@@ -62,6 +62,7 @@ export default {
         'card': '0 2px 12px rgba(15,19,64,0.08)',
         'sheet': '0 -8px 32px rgba(15,19,64,0.14)',
         'green': '0 0 20px rgba(111,168,0,0.25)',
+        'phone': '0 0 0 1px rgba(201,232,110,0.15), 0 40px 100px rgba(0,0,0,0.7), 0 0 80px rgba(111,168,0,0.08)',
       },
     },
   },
