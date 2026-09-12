@@ -35,8 +35,10 @@ export function LoginPage() {
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Error desconocido'
       setErrorMsg(
-        msg.includes('provider is not enabled') || msg.includes('not enabled')
-          ? 'Este método de acceso aún no está activado. Intenta con otro.'
+        msg === '__oauth_not_configured__'
+          ? 'Apple y Google requieren configuración en el dashboard de Supabase. Por ahora usa teléfono o correo.'
+          : msg.includes('provider is not enabled') || msg.includes('not enabled') || msg.includes('400')
+          ? 'Este proveedor no está activado aún. Usa teléfono o correo.'
           : msg.includes('Invalid login')
           ? 'Correo o contraseña incorrectos'
           : msg.includes('Phone')
@@ -52,13 +54,20 @@ export function LoginPage() {
 
   const handleApple = () =>
     withLoader(async () => {
-      await signInWithApple()
-      // Redirect happens via OAuth, no navigate needed
+      try {
+        await signInWithApple()
+      } catch {
+        throw new Error('__oauth_not_configured__')
+      }
     })
 
   const handleGoogle = () =>
     withLoader(async () => {
-      await signInWithGoogle()
+      try {
+        await signInWithGoogle()
+      } catch {
+        throw new Error('__oauth_not_configured__')
+      }
     })
 
   const handleSendOtp = () =>
@@ -111,7 +120,8 @@ export function LoginPage() {
               loading={loading}
               icon={<AppleLogo />}
               label="Continuar con Apple"
-              className="bg-white text-black hover:bg-gray-100"
+              badge="Próximamente"
+              className="bg-white/90 text-black hover:bg-white"
             />
 
             {/* Google */}
@@ -120,6 +130,7 @@ export function LoginPage() {
               loading={loading}
               icon={<GoogleLogo />}
               label="Continuar con Google"
+              badge="Próximamente"
               className="bg-vygo-card border border-vygo-border text-vygo-white hover:bg-vygo-card-2"
             />
 
@@ -327,22 +338,28 @@ function ErrorBanner({ msg, onClose }: { msg: string; onClose: () => void }) {
 }
 
 function SocialButton({
-  onClick, loading, icon, label, className,
+  onClick, loading, icon, label, className, badge,
 }: {
   onClick: () => void
   loading: boolean
   icon: React.ReactNode
   label: string
   className: string
+  badge?: string
 }) {
   return (
     <button
       onClick={onClick}
       disabled={loading}
-      className={`flex items-center justify-center gap-3 w-full h-14 rounded-2xl text-[15px] font-semibold transition-all duration-200 disabled:opacity-60 ${className}`}
+      className={`relative flex items-center justify-center gap-3 w-full h-14 rounded-2xl text-[15px] font-semibold transition-all duration-200 disabled:opacity-60 ${className}`}
     >
       <span className="w-5 h-5 flex items-center justify-center flex-shrink-0">{icon}</span>
       {label}
+      {badge && (
+        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[9px] font-bold uppercase tracking-wide bg-black/20 text-current opacity-60 rounded-full px-2 py-0.5">
+          {badge}
+        </span>
+      )}
     </button>
   )
 }
