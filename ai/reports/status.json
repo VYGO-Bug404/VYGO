@@ -1,7 +1,7 @@
 {
-  "generado_en": "2026-09-12T16:39:07+00:00",
-  "bloque": "B4-separacion-ka-economia-y-agente-entrenado",
-  "commit": "5bbcb88",
+  "generado_en": "2026-09-12T18:42:45+00:00",
+  "bloque": "B5-evento-turnos-congelados-y-demo-pareada",
+  "commit": "0350de9",
   "dirty": true,
   "entorno": {
     "nivel": null,
@@ -9,7 +9,7 @@
     "steps_por_segundo": null
   },
   "tests": {
-    "pasaron": 12,
+    "pasaron": 14,
     "fallaron": 0,
     "xfail": 0,
     "detalle_fallos": []
@@ -19,7 +19,7 @@
     "violaciones_capacidad": 0,
     "fifo_ok": true,
     "contabilidad_ok": true,
-    "holdout_intacto": null
+    "holdout_intacto": true
   },
   "baselines": {
     "B0": {
@@ -27,21 +27,21 @@
       "estado": "no_implementado"
     },
     "B1": {
-      "rho": 345.97,
-      "pedidos_h": 7.3,
-      "puntualidad": 1.0,
-      "bundling": 0.88
+      "rho": 280.39,
+      "pedidos_h": 5.45,
+      "puntualidad": 0.97,
+      "bundling": 0.91
     },
     "B2": {
-      "rho": 338.39,
-      "pedidos_h": 7.28,
-      "puntualidad": 1.0,
-      "bundling": 0.89
+      "rho": 272.21,
+      "pedidos_h": 5.15,
+      "puntualidad": 0.97,
+      "bundling": 0.9
     },
-    "B2_ingenuo": {
-      "rho": 334.63,
-      "pedidos_h": 7.18,
-      "puntualidad": 1.0,
+    "agente_ppo_en_curso": {
+      "rho": 190.48,
+      "pedidos_h": 4.84,
+      "puntualidad": 0.97,
       "bundling": 0.89
     },
     "B3": {
@@ -55,12 +55,56 @@
     "semillas": [
       0
     ],
-    "pasos_totales": 25008,
+    "pasos_totales": 300096,
     "pasos_objetivo": 1075000,
-    "eta_minutos": 469.3787564172043,
+    "eta_minutos": 342.0349943851944,
     "curva": [
       {
         "paso": 25008,
+        "rho_val": 0.0
+      },
+      {
+        "paso": 50016,
+        "rho_val": 0.0
+      },
+      {
+        "paso": 75024,
+        "rho_val": 0.0
+      },
+      {
+        "paso": 100032,
+        "rho_val": 0.0
+      },
+      {
+        "paso": 125040,
+        "rho_val": 0.0
+      },
+      {
+        "paso": 150048,
+        "rho_val": 0.0
+      },
+      {
+        "paso": 175056,
+        "rho_val": 0.0
+      },
+      {
+        "paso": 200064,
+        "rho_val": 0.0
+      },
+      {
+        "paso": 225072,
+        "rho_val": 0.0
+      },
+      {
+        "paso": 250080,
+        "rho_val": 0.0
+      },
+      {
+        "paso": 275088,
+        "rho_val": 0.0
+      },
+      {
+        "paso": 300096,
         "rho_val": 0.0
       }
     ],
@@ -82,16 +126,15 @@
   },
   "diagnostico_automatico": [],
   "bloqueos": [
-    "K_A_MAXIMO (feasibility.py, tope de PEDIDOS en el plan) se DESACOPLÓ de sequencer.UMBRAL_EXACTO_PEDIDOS (hasta cuántos pedidos held_karp resuelve exacto) -- estaban fusionadas en 3, así que bajar el umbral exacto por steps/s le bajaba la capacidad al repartidor de regalo. Ahora UMBRAL_EXACTO_PEDIDOS=3 (sin cambio, decisión de algoritmo) y K_A_MAXIMO=4 (decisión del problema); el 4º pedido del plan se calendariza por el camino heurístico, no el exacto. De paso se corrigió un bug real: el conteo de pedidos en el plan usaba `len(plan)//2` (paradas/2), que SUBcuenta en cuanto una recogida ya se procesó (esa parada sale del plan, sólo queda la entrega) -- ahora cuenta IDs de pedido distintos (`sequencer.n_pedidos_en_plan`) en feasibility.py, baselines.py y el assert de env.py. Test nuevo: test_k_a_maximo_desacoplado_de_umbral_exacto_permite_cuarto_pedido.",
-    "Auditoría de economía: se imprimió el desglose completo de un turno (ingreso bruto, costo por km, horas conectadas) y NO se encontró bug de conversión -- el costo por km sí se resta, las horas sí son horas (t/3600 en todos los sitios), la tarifa no se suma dos veces (ganancia_acum y el reward por step son acumuladores separados, cada uno incrementado una sola vez por entrega). rho salía alto porque la tarifa por km era generosa, no por unidades mal aplicadas -- se bajó _TARIFA_BETA_KM_MXN de (7,11) a (6,8), tal como autorizaba la tarea como fallback. Antes/después de un turno de 2h (semilla 0, misma corrida salvo beta): ingreso 548.26->248.72 MXN, costo_km 62.4->31.2 MXN, rho 242.93->108.76 MXN/h (nota: la comparación no es de trayectoria idéntica -- el prefiltro de feasibility.py rankea por precio/distancia, así que bajar la tarifa cambia QUÉ ofertas se evalúan primero incluso con la misma semilla).",
-    "Fechas límite: la fórmula se apretó a creado_en + tiempo_directo*1.6 + 20min (antes: tiempo_listo_en + ...*1.6 + 10min, con el margen de preparación GRATIS encima). Resultado: puntualidad SIGUE en 1.00 exacto en las tres políticas, confirmado tras el cambio. Causa raíz encontrada (no es que el margen siga siendo grande): `sequencer.verificar_y_calendarizar` trata fecha_limite como restricción DURA (rechaza cualquier secuencia que la violaría, igual que frescura/capacidad) -- pero ai/CLAUDE.md §2 sólo lista frescura, capacidad y precedencia como duras; fecha_limite está pensada como BLANDA (§7: penalización `psi_i * max(0, T_entrega - limite_i)` en la recompensa). Con el límite hard-masked, ese código de penalización nunca se ejecuta -- es código muerto, y ninguna fórmula de límite puede crear riesgo real mientras esto no cambie. Es un cambio de arquitectura del secuenciador (la pasada hacia atrás usa l_idx como ancla para las cotas de espera estratégica de frescura), no una línea -- no se tocó esta vuelta (fuera del presupuesto de 5 min de la tarea); queda documentado como el bloqueo real para que puntualidad dependa de la política.",
-    "Prueba de sanidad completa (20 escenarios x 2h) DESPUÉS de los tres arreglos: B1 rho=345.97, B2=338.39, B2-ingenuo=334.63, bundling~0.88-0.89 en las tres, puntualidad=1.00. B2 vs B1 = **-2.2%** (B2 quedó LIGERAMENTE PEOR que la política ingenua, no mejor) -- resultado honesto, no se suavizó. Lectura: con tope_ka en 89.1% del histograma de rechazos (bajó de 96-99.7% pero sigue dominando total), el entorno sigue tan saturado de demanda que el plan llega a su tope casi de inmediato aun con K_A_MAXIMO=4; en ese régimen, la selectividad de B2 (esperar una tasa marginal mejor) cuesta más rendimiento del que gana, mientras B1 (aceptar la primera factible) mantiene el pipeline lleno. La tarea es explícita en que esto no bloquea seguir: 'no importa qué salga, pasamos a entrenamiento igual'.",
-    "Clonación de comportamiento (BC) sobre B2: 50 000 transiciones (5 escenarios semilla 0-4, L1), concordancia_val=0.998 (objetivo >=0.80, superado). PERO la primera corrida (entropía cruzada sin ponderar) dio rho_rollout=0.00 en 20 escenarios -- la red predice perfecto en datos i.i.d. pero colapsa a 'rechazar siempre' en rollout cerrado: 'rechazar_todas' es ~90%+ de las transiciones (tope_ka domina), así que la entropía cruzada promedio ignora casi por completo las acciones de ACEPTAR, que son las únicas que importan. Se diagnosticó (no se subieron épocas a ciegas): pesos de clase balanceados (inverso a frecuencia, cap 20x) en la pérdida. Con eso, concordancia específica en acciones de aceptar subió a ~90-97% (era ~ignorada antes) -- PERO el rollout SIGUE colapsando a rho=0.00 (detectado barato con una corrida de humo de 3 escenarios antes de pagar los 20 completos). Esto ya no es un bug de features ni de balance de clases: es la limitación clásica de behavior cloning puro (error compuesto / distribution shift en lazo cerrado) que MaskablePPO, inicializado desde este mismo checkpoint y corrigiendo con datos on-policy, está diseñado para resolver -- por eso la tarea pide PPO como el siguiente paso, no un BC perfecto. `checkpoints/bc_policy.pt` guardado tal cual (piso documentado como no-funcional en rollout aislado, no como éxito).",
-    "MaskablePPO lanzado desde bc_policy.pt vía lanzar.ps1 y CONFIRMADO en vivo: steps/s=490 medidos (16 envs, DummyVecEnv, L1), pero evaluar 10 escenarios de validación cuesta 606.6s contra sólo 51.0s de entrenar 25 000 pasos -- la evaluación domina el costo por ciclo 12x. Sin medir esto, pasos_objetivo se hubiera dimensionado como si evaluar fuera gratis y la corrida real hubiera tardado ~4 días en vez de las ~8h pedidas, sin que nada lo avisara hasta muy tarde. Se corrigió midiendo el costo de UNA evaluación completa antes de fijar pasos_objetivo (ahora 1 075 000 = 43 ciclos de 25 000, ~8h reales). Primer callback confirmado: paso=25008, rho_val=0.00 (igual al piso de BC, esperado: recién arrancó la corrección on-policy), eta=469min, status.json y train_log.jsonl actualizados, checkpoint guardado en checkpoints/ppo_best.zip.",
-    "Bug encontrado y corregido al medir steps/s: el benchmark original usaba `action_space.sample()` (acción aleatoria SIN máscara). `env._aplicar_accion` no vuelve a imponer K_A_MAXIMO por su cuenta (sólo lo hace `feasibility.action_mask`, que toda política real respeta por construcción), así que una acción de aceptar fuera de máscara coló un 5º pedido y disparó el assert de seguridad de `_aceptar_oferta`, tumbando el proceso en segundo plano a los pocos segundos. Corregido: el benchmark ahora muestrea sólo entre las acciones que la máscara permite (mismo patrón que `baselines.politica_aleatoria`). MaskablePPO en sí nunca samplea fuera de máscara (por diseño de sb3-contrib), así que esto no afecta el entrenamiento real -- sólo afectaba a este script de medición.",
-    "En L0 no hay competidores sintéticos (n_competidores_base=0 por diseño), así que p_gana_estimada=1.0 siempre; B2 vs B2-ingenuo dio +1.1% en esta corrida.",
-    "evaluate.py, export_vygo.py siguen siendo stubs sin cuerpo.",
-    "baselines B0 (aleatoria) y B3 (MILP rodante) no implementados -- sólo B1/B2/B2-ingenuo (docs/vygo-ai-training.md §6.1); scenarios/test_50.pkl no existe."
+    "vygo/eventos.py: SURGE (tarifa x1.4 + intensidad x1.6 en una zona, 45 min) y CIERRE_VIAL (corredor bloqueado, factor_detour x1.7, 40 min), guionados y configurables en YAML (config/evento_surge.yaml, config/evento_cierre_vial.yaml). Se enganchan por las DOS interfaces que ya existían: generator.GeneradorPedidos.modificador(t, zona) y geo.GridWorld.travel(..., corredores_cerrados=...) -- ni baselines.politica_umbral ni sequencer.held_karp saben que existe un 'evento'. Bug real encontrado de paso: el multiplicador de DEMANDA del modificador se calculaba en generator._lambda_total pero nunca se aplicaba (sólo el de tarifa) -- corregido con GeneradorPedidos._intensidad_efectiva, usado tanto en _lambda_total como en el peso de selección de comercio de _crear_pedido. La reacción EMERGE, no se programa: tests/test_eventos.py prueba los dos casos concretos -- SURGE sube el precio de una oferta hasta que su tasa marginal supera rho_hat y politica_umbral la acepta SOLA (misma regla, ningún caso especial); CIERRE_VIAL hace que held_karp encuentre un tiempo total mayor para el MISMO par de pedidos con el MISMO código, sólo porque travel_fn ahora reporta cruces más caros. Estado del evento expuesto en el slot 5 del bloque 'plan activo' de la observación (siempre en cero porque K_A_MAXIMO=4 < K_A=6) -- dimensión de 186 sin cambios.",
+    "scenarios/test_30.pkl: 30 turnos de 2h, semillas 10000-10029 (reservadas para test, nunca usadas por bc.py/train_ppo.py), 15 con SURGE y 15 con CIERRE_VIAL. Escrito UNA VEZ (vygo/congelar_escenarios.py); sha256 verificado en report.py (`holdout_intacto`). Nivel L0, no L1: se verificó que en L1 con m_comercios=80 el agente gana CERO rondas en un turno de 2h completo (25 competidores sintéticos activos) incluso sin ningún evento de por medio -- hallazgo real, pre-existente, no introducido por esta tarea; documentado, no arreglado (fuera de alcance de este bloque). L0 es la única forma de que la evaluación pareada mida selección de ofertas en vez de suerte contra la competencia.",
+    "vygo/evaluate.py: B1 vs B2 (y 'agente' si hay checkpoint en checkpoints/, se salta limpio si no) sobre los 30 escenarios, con desglose ANTES/DESPUÉS del evento y bootstrap de 10 000 remuestreos pareado por escenario. Resultado medido: B2 vs B1 = -2.9% en rho_mediana (IC 95%: [-43.5%, +37.8%] -- el intervalo cruza 0, no hay evidencia de que B2 le gane a B1 con estos 30 escenarios). Consistente con el -2.2% del bloque anterior: el régimen sigue saturado por tope_ka. El checkpoint agente(PPO) cargado en vivo desde el entrenamiento EN CURSO de otra sesión queda por debajo de ambos baselines (rho_mediana=190.48 total, cae a 77.45 en el bucket 'después') -- esperable con el entrenamiento todavía temprano, no un bug de evaluate.py.",
+    "REQUISITO (a) DEL RETO -- 'que el agente gane más que un baseline simple en un turno fresco' -- la infraestructura para MEDIR esto (escenarios congelados, evaluación pareada con bootstrap, demo) está completa y funciona correctamente, pero con el checkpoint actual el agente entrenado NO cumple el requisito todavía: pierde contra B1. Esto se reporta tal cual, no se suaviza.",
+    "demo/turno.html (103 KiB, autocontenido, sin CDN, abre sin servidor): dos/tres paneles simultáneos (B1, B2, agente si hay checkpoint) sobre el escenario 0 (SURGE, semilla 10000) -- repartidor, comercios, pedidos a bordo con barra de frescura, contador de ganancias, banner de evento activo, controles play/pausa/1x/4x/16x/slider/reiniciar, y panel de explicación por decisión (tasa marginal, rho_hat, desvío min/km, holgura de frescura, frase legible). Datos generados por vygo/generar_demo.py (frames DISPERSOS -- sólo cuando algo visible cambia, no cada cierre de ronda trivial: ~140-154 frames por política en vez de ~10 000 pasos crudos) y empaquetados por vygo/empaquetar_demo.py desde una plantilla (demo/_plantilla_turno.html).",
+    "(bloque anterior, resumen) K_A_MAXIMO se desacopló de UMBRAL_EXACTO_PEDIDOS (4 vs 3) con un bug de conteo corregido (sequencer.n_pedidos_en_plan); tarifa por km bajada (7,11)->(6,8) tras auditoría de economía sin bug encontrado; fecha_limite sigue hard-masked (debería ser blanda por CLAUDE.md §7, no arreglado, ver 'siguiente paso'); sanidad de 20 escenarios dio B2 vs B1 = -2.2%; BC sobre B2 colapsó a rho_rollout=0.00 pese a concordancia=0.998 (limitación clásica de BC puro, no bug); MaskablePPO lanzado desde bc_policy.pt vía lanzar.ps1 con dos bugs de arranque encontrados y corregidos (benchmark sin máscara, costo de evaluar no contado en pasos_objetivo). Detalle completo en el HANDOFF de ese commit (`ai: separacion K_A vs umbral exacto...`).",
+    "PPO de la otra sesión sigue entrenando en vivo (checkpoints/ppo_best.zip se actualiza solo); esta tarea sólo LEE ese checkpoint para evaluate.py/demo, nunca lo entrena ni toca train_ppo.py/bc.py/policy_net.py.",
+    "export_vygo.py sigue siendo un stub sin cuerpo.",
+    "baselines B0 (aleatoria) y B3 (MILP rodante) no implementados -- sólo B1/B2 (docs/vygo-ai-training.md §6.1)."
   ],
-  "siguiente_paso_sugerido": "Vigilar reports/train_log.jsonl: si PPO no logra rho_val > 0 en las primeras evaluaciones, el problema es el mismo régimen saturado por tope_ka que ya hundió a B2 -- ahí sí valdría la pena reconsiderar K_A_MAXIMO o el hard-mask de fecha_limite antes de seguir. Si PPO sí despega, dejarlo correr hasta pasos_objetivo y comparar contra B1/B2 con evaluate.py (todavía stub)."
+  "siguiente_paso_sugerido": "Cuando el entrenamiento de la otra sesión avance, re-correr `python -m vygo.evaluate` y `python -m vygo.generar_demo && python -m vygo.empaquetar_demo` para ver si el agente ya supera a B1 (requisito (a) del reto) -- hoy no lo hace. Si sigue sin despegar, el sospechoso número uno sigue siendo el régimen saturado por tope_ka (89.1% del histograma de rechazos) y el hard-mask de fecha_limite, ambos ya documentados."
 }

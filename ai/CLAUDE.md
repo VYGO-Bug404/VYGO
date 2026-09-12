@@ -119,24 +119,38 @@ ai/
 │   ├── env_l0.yaml            # rejilla, sin clima, sin preparación
 │   ├── env_l1.yaml            # zonas de densidad, preparación, clima, difusión por rondas
 │   ├── env_l2.yaml            # red vial real MTY (sólo demo/eval)
-│   └── ppo.yaml
+│   ├── ppo.yaml
+│   ├── evento_surge.yaml      # SURGE guionado (vygo/eventos.py), tarifa/demanda x zona
+│   └── evento_cierre_vial.yaml # CIERRE_VIAL guionado, corredor bloqueado x tiempo
 ├── vygo/
 │   ├── schema.py              # dataclasses espejo de la BD + enums
-│   ├── geo.py                 # rejilla, zonas, matrices de tiempo/distancia
+│   ├── geo.py                 # rejilla, zonas, matrices de tiempo/distancia, Corredor
 │   ├── weather.py             # cadena de Markov de 5 estados
 │   ├── generator.py           # llegada de pedidos + difusión por rondas
+│   ├── eventos.py             # SURGE / CIERRE_VIAL guionados, ProgramadorEventos
 │   ├── sequencer.py           # Held–Karp exacto
 │   ├── insertion.py           # Δt_j, Δδ_j óptimos por oferta
 │   ├── feasibility.py         # máscara exacta
 │   ├── env.py                 # VygoEnv (gymnasium)
 │   ├── baselines.py           # B0, B1, B2, B3
 │   ├── features.py            # construcción del vector de observación
-│   ├── train_ppo.py
-│   ├── evaluate.py            # protocolo pareado sobre escenarios congelados
+│   ├── policy_net.py          # red BC/PPO (self-attn plan + cross-attn ofertas)
+│   ├── bc.py                  # clonación de comportamiento sobre B2
+│   ├── train_ppo.py           # MaskablePPO desde bc_policy.pt
+│   ├── congelar_escenarios.py # escribe scenarios/test_30.pkl UNA VEZ
+│   ├── evaluate.py            # protocolo pareado B1/B2/agente sobre escenarios congelados
+│   ├── generar_demo.py        # replay B1/B2/agente -> demo/turno_datos.json
+│   ├── empaquetar_demo.py     # datos.json + plantilla -> demo/turno.html autocontenido
 │   ├── report.py              # genera reports/status.json + HANDOFF.md
 │   └── export_vygo.py         # vuelca episodios al esquema VYGO (SQL/CSV)
-├── tests/test_invariants.py
-├── scenarios/test_50.pkl      # congelado, nunca regenerar
+├── tests/
+│   ├── test_invariants.py
+│   └── test_eventos.py        # SURGE/CIERRE_VIAL emergen de la máscara/secuenciador, sin caso especial
+├── scenarios/test_30.pkl      # congelado, nunca regenerar (ver congelar_escenarios.py)
+├── demo/
+│   ├── _plantilla_turno.html  # plantilla con marcador __DATOS_JSON__
+│   ├── turno_datos.json       # generado por generar_demo.py (intermedio, se puede rehacer)
+│   └── turno.html             # AUTOCONTENIDO, sin CDN -- abre sin servidor
 └── reports/
     ├── status.json            # legible por máquina
     ├── HANDOFF.md             # legible por humano/LLM

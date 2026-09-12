@@ -1,1 +1,12 @@
 {"ts": "2026-09-12T16:37:47+00:00", "paso": 25008, "pasos_objetivo": 1075000, "rho_val": 0.0, "mejor_rho_val": 0.0, "nuevo_mejor": true, "eta_minutos": 469.3787564172043}
+{"ts": "2026-09-12T16:51:04+00:00", "paso": 50016, "pasos_objetivo": 1075000, "rho_val": 0.0, "mejor_rho_val": 0.0, "nuevo_mejor": false, "eta_minutos": 501.18136703552574}
+{"ts": "2026-09-12T17:05:39+00:00", "paso": 75024, "pasos_objetivo": 1075000, "rho_val": 0.0, "mejor_rho_val": 0.0, "nuevo_mejor": false, "eta_minutos": 520.3668113650822}
+{"ts": "2026-09-12T17:17:08+00:00", "paso": 100032, "pasos_objetivo": 1075000, "rho_val": 0.0, "mejor_rho_val": 0.0, "nuevo_mejor": false, "eta_minutos": 492.467293152997}
+{"ts": "2026-09-12T17:27:32+00:00", "paso": 125040, "pasos_objetivo": 1075000, "rho_val": 0.0, "mejor_rho_val": 0.0, "nuevo_mejor": false, "eta_minutos": 462.8433247023855}
+{"ts": "2026-09-12T17:39:05+00:00", "paso": 150048, "pasos_objetivo": 1075000, "rho_val": 0.0, "mejor_rho_val": 0.0, "nuevo_mejor": false, "eta_minutos": 446.77824443874505}
+{"ts": "2026-09-12T17:50:29+00:00", "paso": 175056, "pasos_objetivo": 1075000, "rho_val": 0.0, "mejor_rho_val": 0.0, "nuevo_mejor": false, "eta_minutos": 431.1562908154079}
+{"ts": "2026-09-12T18:01:35+00:00", "paso": 200064, "pasos_objetivo": 1075000, "rho_val": 0.0, "mejor_rho_val": 0.0, "nuevo_mejor": false, "eta_minutos": 415.36438764733737}
+{"ts": "2026-09-12T18:11:28+00:00", "paso": 225072, "pasos_objetivo": 1075000, "rho_val": 0.0, "mejor_rho_val": 0.0, "nuevo_mejor": false, "eta_minutos": 395.97445718052774}
+{"ts": "2026-09-12T18:21:03+00:00", "paso": 250080, "pasos_objetivo": 1075000, "rho_val": 0.0, "mejor_rho_val": 0.0, "nuevo_mejor": false, "eta_minutos": 377.51899898502614}
+{"ts": "2026-09-12T18:30:30+00:00", "paso": 275088, "pasos_objetivo": 1075000, "rho_val": 0.0, "mejor_rho_val": 0.0, "nuevo_mejor": false, "eta_minutos": 360.25511986984736}
+{"ts": "2026-09-12T18:39:04+00:00", "paso": 300096, "pasos_objetivo": 1075000, "rho_val": 0.0, "mejor_rho_val": 0.0, "nuevo_mejor": false, "eta_minutos": 342.0349943851944}

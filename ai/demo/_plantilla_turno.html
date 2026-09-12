@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>VYGO -- turno congelado, B1 vs B2</title>
+<style>
+  :root {
+    --b1: #2563eb;
+    --b2: #16a34a;
+    --agente: #7c3aed;
+    --fondo: #f7f6f2;
+    --texto: #1f2430;
+    --borde: #ddd8cc;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 16px; background: var(--fondo); color: var(--texto);
+    font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  }
+  h1 { font-size: 1.25rem; margin: 0 0 4px; }
+  .subtitulo { color: #666; font-size: 0.85rem; margin-bottom: 12px; }
+
+  .banner-evento {
+    display: none; padding: 8px 14px; border-radius: 8px; font-weight: 600;
+    margin-bottom: 12px; font-size: 0.9rem;
+  }
+  .banner-evento.activo { display: block; }
+  .banner-evento.surge { background: #fff1de; color: #a65a00; border: 1px solid #f3c98a; }
+  .banner-evento.cierre_vial { background: #fde8e8; color: #a01818; border: 1px solid #f0a3a3; }
+
+  .controles {
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    background: white; border: 1px solid var(--borde); border-radius: 10px;
+    padding: 10px 14px; margin-bottom: 14px;
+  }
+  .controles button {
+    border: 1px solid var(--borde); background: #fff; border-radius: 6px;
+    padding: 6px 12px; cursor: pointer; font-size: 0.85rem;
+  }
+  .controles button:hover { background: #f0efe9; }
+  .controles button.activo { background: var(--texto); color: white; }
+  .controles input[type="range"] { flex: 1; min-width: 160px; }
+  #tiempoTexto { font-variant-numeric: tabular-nums; font-size: 0.85rem; min-width: 150px; }
+
+  .paneles { display: flex; gap: 14px; flex-wrap: wrap; }
+  .panel {
+    flex: 1 1 320px; min-width: 300px; background: white; border-radius: 10px;
+    border: 1px solid var(--borde); padding: 12px; border-top: 5px solid #999;
+  }
+  .panel.B1 { border-top-color: var(--b1); }
+  .panel.B2 { border-top-color: var(--b2); }
+  .panel[data-politica^="agente"] { border-top-color: var(--agente); }
+
+  .panel h2 { font-size: 1rem; margin: 0 0 8px; display: flex; justify-content: space-between; }
+  .panel .badge { font-size: 0.7rem; padding: 2px 8px; border-radius: 999px; background: #eee; color: #555; }
+
+  canvas.grid-canvas { width: 100%; aspect-ratio: 1 / 1; background: #fbfaf6; border-radius: 6px; display: block; }
+
+  .metricas { display: flex; justify-content: space-between; margin: 10px 0; }
+  .ganancia { font-size: 1.6rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .rho { font-size: 0.8rem; color: #666; }
+
+  .plan-list { min-height: 20px; margin-bottom: 8px; }
+  .pedido-row { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; font-size: 0.75rem; }
+  .pedido-id { width: 44px; color: #888; flex-shrink: 0; }
+  .frescura-bar { flex: 1; height: 8px; background: #eee; border-radius: 4px; overflow: hidden; }
+  .frescura-fill { height: 100%; transition: width 0.2s linear; }
+
+  .explicacion {
+    background: #f5f4ef; border-radius: 8px; padding: 8px 10px; font-size: 0.78rem;
+    min-height: 74px; line-height: 1.35;
+  }
+  .explicacion .frase { font-weight: 600; margin-bottom: 4px; }
+  .explicacion .detalle { color: #555; }
+  .explicacion .vacio { color: #999; font-style: italic; }
+
+  footer { margin-top: 16px; color: #888; font-size: 0.72rem; }
+</style>
+</head>
+<body>
+
+<h1>VYGO -- turno congelado</h1>
+<div class="subtitulo" id="subtitulo"></div>
+
+<div id="bannerSurge" class="banner-evento surge">⚡ SURGE activo</div>
+<div id="bannerCierre" class="banner-evento cierre_vial">🚧 CIERRE VIAL activo</div>
+
+<div class="controles">
+  <button id="btnPlay">▶ Reproducir</button>
+  <button class="btn-speed activo" data-speed="1">1x</button>
+  <button class="btn-speed" data-speed="4">4x</button>
+  <button class="btn-speed" data-speed="16">16x</button>
+  <input type="range" id="slider" min="0" max="1000" step="1" value="0">
+  <span id="tiempoTexto">00:00 / 00:00</span>
+  <button id="btnReiniciar">⟲ Reiniciar</button>
+</div>
+
+<div class="paneles" id="paneles"></div>
+
+<footer>Datos generados por <code>vygo/generar_demo.py</code> sobre un escenario de <code>scenarios/test_30.pkl</code> -- reproducción, no simulación en vivo.</footer>
+
+<script id="datos" type="application/json">__DATOS_JSON__</script>
+<script>
+(function () {
+  "use strict";
+  const DATOS = JSON.parse(document.getElementById("datos").textContent);
+  const COLORES = { B1: "#2563eb", B2: "#16a34a" };
+  function colorDe(politica) {
+    if (COLORES[politica]) return COLORES[politica];
+    return "#7c3aed"; // agente(*)
+  }
+
+  const nombresPoliticas = Object.keys(DATOS.politicas);
+  const contenedor = document.getElementById("paneles");
+  const canvases = {};
+  const elementos = {};
+
+  for (const nombre of nombresPoliticas) {
+    const panel = document.createElement("div");
+    panel.className = "panel " + nombre.replace(/[^A-Za-z0-9]/g, "");
+    panel.dataset.politica = nombre;
+    panel.style.borderTopColor = colorDe(nombre);
+    panel.innerHTML = `
+      <h2>${nombre} <span class="badge">${nombre.startsWith("agente") ? "entrenado" : "baseline"}</span></h2>
+      <canvas class="grid-canvas" width="400" height="400"></canvas>
+      <div class="metricas">
+        <div class="ganancia">$0.00</div>
+        <div class="rho">rho: -- MXN/h</div>
+      </div>
+      <div class="plan-list"></div>
+      <div class="explicacion"><span class="vacio">Sin decisión todavía.</span></div>
+    `;
+    contenedor.appendChild(panel);
+    canvases[nombre] = panel.querySelector("canvas");
+    elementos[nombre] = {
+      ganancia: panel.querySelector(".ganancia"),
+      rho: panel.querySelector(".rho"),
+      planList: panel.querySelector(".plan-list"),
+      explicacion: panel.querySelector(".explicacion"),
+    };
+  }
+
+  document.getElementById("subtitulo").textContent =
+    `Grid ${DATOS.grid_n}x${DATOS.grid_n} -- turno de ${Math.round(DATOS.duracion_s / 60)} min` +
+    (DATOS.evento ? ` -- evento: ${DATOS.evento.tipo} a los ${Math.round(DATOS.evento.inicia_s / 60)} min` : "");
+
+  function frameEnT(frames, t) {
+    if (!frames.length) return null;
+    if (t < frames[0].t) return frames[0];
+    let lo = 0, hi = frames.length - 1, res = 0;
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1;
+      if (frames[mid].t <= t) { res = mid; lo = mid + 1; } else { hi = mid - 1; }
+    }
+    return frames[res];
+  }
+
+  function eventoActivoEn(t) {
+    const ev = DATOS.evento;
+    if (!ev) return null;
+    return (t >= ev.inicia_s && t < ev.fin_s) ? ev.tipo : null;
+  }
+
+  function dibujarGrid(canvas, frame, color) {
+    const ctx = canvas.getContext("2d");
+    const tam = canvas.width;
+    const n = DATOS.grid_n;
+    const celda = tam / n;
+    ctx.clearRect(0, 0, tam, tam);
+    ctx.fillStyle = "#fbfaf6";
+    ctx.fillRect(0, 0, tam, tam);
+
+    const tipoActivo = eventoActivoEn(frame.t);
+    if (tipoActivo === "surge") {
+      const ev = DATOS.evento;
+      ctx.fillStyle = "rgba(255,150,40,0.20)";
+      ctx.beginPath();
+      ctx.arc((ev.zona[1] + 0.5) * celda, (ev.zona[0] + 0.5) * celda, ev.radio_celdas * celda, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (tipoActivo === "cierre_vial") {
+      const ev = DATOS.evento;
+      ctx.fillStyle = "rgba(220,40,40,0.30)";
+      if (ev.eje === "columna") ctx.fillRect(ev.indice * celda - 1.5, 0, 3, tam);
+      else ctx.fillRect(0, ev.indice * celda - 1.5, tam, 3);
+    }
+
+    ctx.fillStyle = "#c2a25a";
+    for (const c of DATOS.comercios) {
+      ctx.beginPath();
+      ctx.arc((c[1] + 0.5) * celda, (c[0] + 0.5) * celda, Math.max(1.3, celda * 0.07), 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1.2;
+    ctx.fillStyle = "#333";
+    for (const item of frame.plan) {
+      ctx.beginPath();
+      ctx.moveTo((frame.pos[1] + 0.5) * celda, (frame.pos[0] + 0.5) * celda);
+      ctx.lineTo((item.destino[1] + 0.5) * celda, (item.destino[0] + 0.5) * celda);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc((item.destino[1] + 0.5) * celda, (item.destino[0] + 0.5) * celda, celda * 0.11, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.arc((frame.pos[1] + 0.5) * celda, (frame.pos[0] + 0.5) * celda, celda * 0.24, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  function colorFrescura(frac) {
+    if (frac < 0.25) return "#d1332f";
+    if (frac < 0.5) return "#e6a100";
+    return "#2a9d4a";
+  }
+
+  function renderPlanList(el, frame) {
+    if (!frame.plan.length) {
+      el.innerHTML = '<div class="pedido-row" style="color:#999">(nada a bordo)</div>';
+      return;
+    }
+    el.innerHTML = frame.plan.map((item) => `
+      <div class="pedido-row">
+        <span class="pedido-id">${item.id}</span>
+        <div class="frescura-bar"><div class="frescura-fill" style="width:${(item.frescura_frac * 100).toFixed(0)}%;background:${colorFrescura(item.frescura_frac)}"></div></div>
+      </div>
+    `).join("");
+  }
+
+  function renderExplicacion(el, decision) {
+    if (!decision) {
+      el.innerHTML = '<span class="vacio">Sin decisión todavía.</span>';
+      return;
+    }
+    const claseAccion = decision.accion === "aceptado" ? "color:#16a34a" : "color:#b91c1c";
+    el.innerHTML = `
+      <div class="frase" style="${claseAccion}">${decision.frase}</div>
+      <div class="detalle">
+        oferta ${decision.oferta_id} -- tasa marginal $${decision.tasa_marginal}/h vs tu promedio $${decision.rho_hat}/h ·
+        desvío ${decision.delta_min} min / ${decision.delta_km} km
+        ${decision.holgura_frescura_min != null ? ` · holgura frescura ${decision.holgura_frescura_min} min` : ""}
+      </div>
+    `;
+  }
+
+  const ganMostrada = {};
+  for (const nombre of nombresPoliticas) ganMostrada[nombre] = 0;
+
+  let playbackT = 0;
+  let playing = false;
+  let velocidad = 1;
+  let ultimoTs = null;
+  let ultimaDecision = {};
+
+  const slider = document.getElementById("slider");
+  const tiempoTexto = document.getElementById("tiempoTexto");
+  const btnPlay = document.getElementById("btnPlay");
+  const bannerSurge = document.getElementById("bannerSurge");
+  const bannerCierre = document.getElementById("bannerCierre");
+
+  slider.max = String(Math.round(DATOS.duracion_s));
+
+  function formatoTiempo(s) {
+    const m = Math.floor(s / 60).toString().padStart(2, "0");
+    const ss = Math.floor(s % 60).toString().padStart(2, "0");
+    return `${m}:${ss}`;
+  }
+
+  function actualizarBanner() {
+    const tipo = eventoActivoEn(playbackT);
+    bannerSurge.classList.toggle("activo", tipo === "surge");
+    bannerCierre.classList.toggle("activo", tipo === "cierre_vial");
+    if (tipo === "surge") {
+      const ev = DATOS.evento;
+      bannerSurge.textContent = `⚡ SURGE activo: tarifa x${ev.mult_tarifa}, demanda x${ev.mult_intensidad} en la zona`;
+    } else if (tipo === "cierre_vial") {
+      const ev = DATOS.evento;
+      bannerCierre.textContent = `🚧 CIERRE VIAL activo: ${ev.eje} ${ev.indice} bloqueada, rutas alternas x${ev.factor_detour}`;
+    }
+  }
+
+  function renderizar() {
+    for (const nombre of nombresPoliticas) {
+      const frames = DATOS.politicas[nombre];
+      const frame = frameEnT(frames, playbackT);
+      if (!frame) continue;
+
+      dibujarGrid(canvases[nombre], frame, colorDe(nombre));
+
+      ganMostrada[nombre] += (frame.ganancia - ganMostrada[nombre]) * 0.2;
+      if (Math.abs(ganMostrada[nombre] - frame.ganancia) < 0.01) ganMostrada[nombre] = frame.ganancia;
+      elementos[nombre].ganancia.textContent = "$" + ganMostrada[nombre].toFixed(2);
+      elementos[nombre].rho.textContent = `rho: ${frame.rho.toFixed(0)} MXN/h`;
+
+      renderPlanList(elementos[nombre].planList, frame);
+
+      if (frame.decision) ultimaDecision[nombre] = frame.decision;
+      renderExplicacion(elementos[nombre].explicacion, ultimaDecision[nombre]);
+    }
+    slider.value = String(Math.round(playbackT));
+    tiempoTexto.textContent = `${formatoTiempo(playbackT)} / ${formatoTiempo(DATOS.duracion_s)}`;
+    actualizarBanner();
+  }
+
+  function tick(ts) {
+    if (playing) {
+      if (ultimoTs !== null) {
+        const dtReal = (ts - ultimoTs) / 1000;
+        playbackT = Math.min(DATOS.duracion_s, playbackT + dtReal * velocidad);
+        if (playbackT >= DATOS.duracion_s) playing = false, btnPlay.textContent = "▶ Reproducir";
+      }
+      ultimoTs = ts;
+    } else {
+      ultimoTs = null;
+    }
+    renderizar();
+    requestAnimationFrame(tick);
+  }
+
+  btnPlay.addEventListener("click", () => {
+    playing = !playing;
+    btnPlay.textContent = playing ? "⏸ Pausar" : "▶ Reproducir";
+  });
+
+  document.querySelectorAll(".btn-speed").forEach((b) => {
+    b.addEventListener("click", () => {
+      velocidad = Number(b.dataset.speed);
+      document.querySelectorAll(".btn-speed").forEach((x) => x.classList.remove("activo"));
+      b.classList.add("activo");
+    });
+  });
+
+  slider.addEventListener("input", () => {
+    playing = false;
+    btnPlay.textContent = "▶ Reproducir";
+    playbackT = Number(slider.value);
+    renderizar();
+  });
+
+  document.getElementById("btnReiniciar").addEventListener("click", () => {
+    playbackT = 0;
+    playing = false;
+    btnPlay.textContent = "▶ Reproducir";
+    for (const nombre of nombresPoliticas) { ganMostrada[nombre] = 0; ultimaDecision[nombre] = null; }
+    renderizar();
+  });
+
+  requestAnimationFrame(tick);
+})();
+</script>
+</body>
+</html>

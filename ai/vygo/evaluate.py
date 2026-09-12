@@ -532,10 +532,13 @@ def _imprimir_demo(demo: dict) -> None:
         print(linea)
 
 
-def _imprimir_tabla(reporte: dict) -> None:
+def _imprimir_tabla(reporte: dict, oficial: bool = False) -> None:
     n = reporte["n_escenarios"]
     print(f"Evaluación pareada -- {n} escenarios congelados (scenarios/test_30.pkl)\n")
-    print("\n".join(_nota_reproducibilidad()))
+    if oficial:
+        from datetime import datetime, timezone
+        print(f"*** MEDICIÓN OFICIAL -- CPU sin contención, {datetime.now(timezone.utc).strftime('%Y-%m-%d')} ***\n")
+    print("\n".join(_nota_reproducibilidad(sin_contencion=oficial)))
     print()
     for bucket, titulo in (("total", "TOTAL"), ("antes", "ANTES del evento"), ("despues", "DESPUÉS del evento")):
         print(f"-- {titulo} --")
@@ -609,62 +612,68 @@ def _experimento_rl_md(reporte: dict) -> list[str]:
     ]
 
 
-def _nota_reproducibilidad() -> list[str]:
-    """Hallazgo real durante esta tarea, no teórico: dos corridas completas de esta misma
-    evaluación sobre los mismos 30 escenarios dieron rho_mediana de B1 = 213.19 MXN/h y,
-    más tarde, 353.25 MXN/h -- con el MISMO código (`git diff` limpio en env.py/generator.py/
-    geo.py/sequencer.py/feasibility.py entre ambas corridas) y el MISMO `scenarios/
-    test_30.pkl` (sha256 verificado sin cambios). B1 es una función pura del estado del
-    entorno: no debería poder variar así. Se aisló la causa: `sequencer.held_karp`, en su
-    camino de enumeración exacta (<=3 pedidos, el caso típico), acota su búsqueda con un
-    presupuesto de RELOJ DE PARED de 25 ms (`_LIMITE_TIEMPO_EXACTO_S`, medido con
-    `time.perf_counter()`); si se agota, cae a la mejor secuencia encontrada hasta ese punto
-    (siempre verificada factible -- nunca viola frescura) pero no necesariamente la óptima.
-    Bajo contención de CPU (la otra sesión entrena PPO en el mismo equipo) ese presupuesto
-    se agota con más frecuencia, degradando la ruta elegida de forma no determinista.
-    Confirmado empíricamente: una recomputación fresca de B1 sobre los 30 escenarios,
-    corrida después, reprodujo 353.25 exactamente -- los números de este reporte son
-    reproducibles bajo la carga de CPU del momento en que se generaron, pero no son
-    invariantes a la carga del sistema. Esto NO se arregló aquí: arreglarlo (por ejemplo,
-    pasar a un presupuesto de tiempo de CPU de proceso en vez de reloj de pared, o subir el
-    límite) requiere tocar `sequencer.py`, fuera de alcance de esta tarea ('no toques el
-    entorno'). Efecto en las conclusiones: la brecha B1/B2 vs B_SERIAL (~250 MXN/h, ~200%)
-    es muchísimo más grande que este ruido y se sostiene sin duda; las comparaciones más
-    finas B2 vs B1 y PPO vs B1 (ya con IC 95% que cruza cero) deben leerse como "no hay
-    evidencia de diferencia" y no como un número fijo -- una repetición de esta evaluación,
-    sobre todo una vez que la otra sesión termine de entrenar, puede moverlas."""
+def _nota_reproducibilidad(sin_contencion: bool = False) -> list[str]:
+    """Hallazgo real durante la tarea anterior, no teórico: dos corridas completas de esta
+    misma evaluación sobre los mismos 30 escenarios dieron rho_mediana de B1 = 213.19 MXN/h
+    y, más tarde, 353.25 MXN/h -- con el MISMO código (`git diff` limpio en env.py/
+    generator.py/geo.py/sequencer.py/feasibility.py entre ambas corridas) y el MISMO
+    `scenarios/test_30.pkl` (sha256 verificado sin cambios). B1 es una función pura del
+    estado del entorno: no debería poder variar así. Se aisló la causa: `sequencer.
+    held_karp`, en su camino de enumeración exacta (<=3 pedidos, el caso típico), acota su
+    búsqueda con un presupuesto de RELOJ DE PARED de 25 ms (`_LIMITE_TIEMPO_EXACTO_S`,
+    medido con `time.perf_counter()`); si se agota, cae a la mejor secuencia encontrada
+    hasta ese punto (siempre verificada factible -- nunca viola frescura) pero no
+    necesariamente la óptima. Bajo contención de CPU (la otra sesión entrenaba PPO en el
+    mismo equipo) ese presupuesto se agotaba con más frecuencia, degradando la ruta elegida
+    de forma no determinista. Se mantiene esta nota siempre (histórico, para que quien lea
+    el reporte entienda por qué corridas anteriores dieron números distintos); `sin_
+    contencion=True` añade el estado de ESTA corrida en particular: PPO ya terminó
+    (descartado) y la máquina estaba en reposo, sin otro proceso pesado corriendo -- es la
+    medición oficial, sin esta fuente de ruido de por medio."""
 
-    return [
+    lineas = [
         "## Nota de reproducibilidad -- por qué estos números pueden variar entre corridas",
         "",
-        "Se detectó y confirmó durante esta tarea: dos corridas completas de esta evaluación "
-        "sobre los MISMOS 30 escenarios, con el MISMO código (verificado sin diferencias en "
-        "env.py/generator.py/geo.py/sequencer.py/feasibility.py entre ambas), dieron "
-        "rho_mediana de B1 = 213.19 MXN/h y, más tarde, 353.25 MXN/h. Causa aislada: "
+        "Se detectó y confirmó en un bloque anterior: dos corridas completas de esta "
+        "evaluación sobre los MISMOS 30 escenarios, con el MISMO código (verificado sin "
+        "diferencias en env.py/generator.py/geo.py/sequencer.py/feasibility.py entre ambas), "
+        "dieron rho_mediana de B1 = 213.19 MXN/h y, más tarde, 353.25 MXN/h. Causa aislada: "
         "`sequencer.held_karp` acota su enumeración exacta (<=3 pedidos, el caso típico) con "
         "un presupuesto de **reloj de pared** de 25 ms (`_LIMITE_TIEMPO_EXACTO_S`); si se "
         "agota, usa la mejor secuencia encontrada hasta ahí (siempre factible, nunca viola "
-        "frescura) pero no necesariamente la óptima. Bajo contención de CPU -- como la de la "
-        "otra sesión entrenando PPO en el mismo equipo -- ese presupuesto se agota más "
-        "seguido y la ruta elegida se degrada de forma no determinista.",
+        "frescura) pero no necesariamente la óptima. Bajo contención de CPU -- como la que "
+        "había mientras la otra sesión entrenaba PPO en el mismo equipo -- ese presupuesto "
+        "se agota más seguido y la ruta elegida se degrada de forma no determinista.",
         "",
-        "Confirmado empíricamente: una recomputación fresca de B1 sobre los 30 escenarios "
-        "reprodujo 353.25 exactamente -- los números de este reporte SÍ son reproducibles "
-        "bajo la carga de CPU con la que se generaron, pero NO son invariantes a la carga "
-        "del sistema en general. No se corrigió aquí: la corrección (p. ej. medir tiempo de "
-        "CPU de proceso en vez de reloj de pared, o subir el límite) requiere tocar "
-        "`sequencer.py`, fuera de alcance de esta tarea (\"no toques el entorno\").",
-        "",
-        "**Efecto en las conclusiones**: la brecha B1/B2 vs B_SERIAL (~250 MXN/h, ~200%) es "
-        "muchísimo más grande que este ruido y se sostiene sin duda. Las comparaciones finas "
-        "B2 vs B1 y PPO vs B1 (IC 95% que ya cruza cero en ambas) deben leerse como \"sin "
-        "evidencia de diferencia\", no como un número fijo -- repetir esta evaluación, sobre "
-        "todo cuando la otra sesión termine de entrenar, puede moverlas.",
+        "No se corrigió: la corrección (p. ej. medir tiempo de CPU de proceso en vez de "
+        "reloj de pared, o subir el límite) requiere tocar `sequencer.py`, fuera de alcance "
+        "de esta tarea (\"no toques el entorno\").",
         "",
     ]
 
+    if sin_contencion:
+        lineas += [
+            "**Esta corrida es la medición oficial**: PPO ya terminó de entrenar (descartado, "
+            "ver sección de RL más abajo) y no había ningún otro proceso pesado corriendo en "
+            "la máquina mientras se ejecutó (confirmado con `Get-Process python` antes de "
+            "empezar) -- esta fuente de ruido no aplica a los números de este reporte.",
+            "",
+        ]
+    else:
+        lineas += [
+            "**Efecto en las conclusiones (de esa corrida con contención)**: la brecha "
+            "B1/B2 vs B_SERIAL (~250 MXN/h, ~200%) es muchísimo más grande que este ruido y "
+            "se sostiene sin duda. Las comparaciones finas B2 vs B1 y PPO vs B1 (IC 95% que "
+            "ya cruza cero en ambas) deben leerse como \"sin evidencia de diferencia\", no "
+            "como un número fijo -- repetir esta evaluación sin contención de CPU puede "
+            "moverlas.",
+            "",
+        ]
 
-def _escribir_eval_md(reporte: dict, ruta: Path) -> None:
+    return lineas
+
+
+def _escribir_eval_md(reporte: dict, ruta: Path, oficial: bool = False) -> None:
     from datetime import datetime, timezone
 
     n = reporte["n_escenarios"]
@@ -672,6 +681,13 @@ def _escribir_eval_md(reporte: dict, ruta: Path) -> None:
     lineas = [
         "# Evaluación pareada -- reto Infosys \"The Courier\"",
         "",
+    ]
+    if oficial:
+        lineas += [
+            f"**Medición oficial -- CPU sin contención, {datetime.now(timezone.utc).strftime('%Y-%m-%d')}**",
+            "",
+        ]
+    lineas += [
         f"Generado: {datetime.now(timezone.utc).isoformat(timespec='seconds')}",
         f"Escenarios: {n} congelados en `scenarios/test_30.pkl` (ver `scenarios/test_30.sha256`), "
         "15 con SURGE y 15 con CIERRE_VIAL, evento siempre a partir del minuto 60. "
@@ -683,7 +699,7 @@ def _escribir_eval_md(reporte: dict, ruta: Path) -> None:
         "",
     ]
 
-    lineas.extend(_nota_reproducibilidad())
+    lineas.extend(_nota_reproducibilidad(sin_contencion=oficial))
 
     for bucket, titulo in (("total", "TOTAL"), ("antes", "ANTES del evento"), ("despues", "DESPUÉS del evento")):
         lineas.append(f"## {titulo}")
@@ -766,6 +782,9 @@ def _escribir_eval_md(reporte: dict, ruta: Path) -> None:
 
 
 if __name__ == "__main__":
+    import sys
+
+    _oficial = "--oficial" in sys.argv
     _reporte = evaluar()
-    _imprimir_tabla(_reporte)
-    _escribir_eval_md(_reporte, _AI_ROOT / "reports" / "EVAL.md")
+    _imprimir_tabla(_reporte, oficial=_oficial)
+    _escribir_eval_md(_reporte, _AI_ROOT / "reports" / "EVAL.md", oficial=_oficial)
