@@ -4,6 +4,7 @@ import { useDriverStore } from '@/stores/driver.store'
 import { useOrdersStore } from '@/stores/orders.store'
 import { useEndShift } from '@/hooks/useEndShift'
 import { useCountUp } from '@/hooks/useCountUp'
+import { usePlatformConnections } from '@/hooks/usePlatformConnections'
 import { EndShiftConfirm } from '@/components/EndShiftConfirm'
 import { DriverStatusBadge } from '@/components/DriverStatusBadge'
 import { MockMap } from '@/components/maps/MockMap'
@@ -14,6 +15,7 @@ import { formatCurrency, formatDistance, formatMinutes } from '@/lib/utils'
 export function HomePage() {
   const driver = useDriverStore((s) => s.driver)
   const driverStatus = useDriverStore((s) => s.status)
+  const { connections: platformConnections } = usePlatformConnections()
   const todayEarnings = useDriverStore((s) => s.todayEarnings)
   const earningsPerHour = useDriverStore((s) => s.earningsPerHour)
   const completedOrders = useDriverStore((s) => s.completedOrders)
@@ -173,12 +175,18 @@ export function HomePage() {
 
           {/* Plataformas conectadas */}
           <div className="px-4 pt-4">
-            <p className="text-xs text-vygo-secondary uppercase tracking-widest mb-2">Plataformas activas</p>
-            <div className="flex gap-2">
-              {driver.platforms.map((p) => (
-                <PlatformBadge key={p} platform={p as 'uber' | 'rappi' | 'didi'} size="md" />
-              ))}
-            </div>
+            <p className="text-xs text-vygo-secondary uppercase tracking-widest mb-2">Plataformas conectadas</p>
+            {platformConnections.length > 0 ? (
+              <div className="flex gap-2">
+                {platformConnections.map((c) => (
+                  <PlatformBadge key={c.platform} platform={c.platform} size="md" />
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs text-vygo-secondary/50">
+                Sin plataformas — agrégalas en tu perfil
+              </p>
+            )}
           </div>
 
           {/* Stats de referencia */}
