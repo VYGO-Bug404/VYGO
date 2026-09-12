@@ -4,13 +4,11 @@ import { generateId } from '@/lib/utils'
 
 export const ordersService = {
   getActiveOrders(): Order[] {
-    return MOCK_ORDERS.filter((o) =>
-      ['heading_to_pickup', 'picked_up', 'accepted'].includes(o.status)
-    )
+    return []
   },
 
   getCompletedOrders(): Order[] {
-    return MOCK_ORDERS.filter((o) => o.status === 'delivered')
+    return []
   },
 
   getOrderById(id: string): Order | undefined {
