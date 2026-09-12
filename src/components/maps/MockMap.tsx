@@ -164,41 +164,43 @@ export function MockMap({
     activeOrders.forEach((order, i) => {
       const num = String(order.routeNumber ?? (i + 1))
       const isFirst = (order.routeNumber ?? (i + 1)) === 1
+      const alreadyPickedUp = order.status === 'picked_up'
 
-      // ── PICKUP marker ──
-      // Pedido 1 → círculo | Pedidos 2+ → triángulo
-      const pickupEl = document.createElement('div')
-      pickupEl.style.cssText = 'cursor:pointer;'
+      // ── PICKUP marker — solo si aún no fue recogido ──
+      if (!alreadyPickedUp) {
+        const pickupEl = document.createElement('div')
+        pickupEl.style.cssText = 'cursor:pointer;'
 
-      if (isFirst) {
-        // Círculo verde
-        pickupEl.innerHTML = `
-          <div style="width:34px;height:34px;background:#11191D;border:2.5px solid #00C875;
-            border-radius:50%;display:flex;align-items:center;justify-content:center;
-            font-family:Inter,sans-serif;font-weight:700;font-size:13px;color:#00C875;
-            box-shadow:0 2px 12px rgba(0,200,117,0.4);">
-            ${num}
-          </div>`
-      } else {
-        // Triángulo verde (SVG)
-        pickupEl.innerHTML = `
-          <div style="position:relative;width:36px;height:34px;display:flex;
-            align-items:center;justify-content:center;">
-            <svg width="36" height="34" viewBox="0 0 36 34" style="position:absolute;top:0;left:0;">
-              <polygon points="18,2 1,33 35,33" fill="#11191D"
-                stroke="#00C875" stroke-width="2.5" stroke-linejoin="round"/>
-            </svg>
-            <span style="position:relative;z-index:1;font-family:Inter,sans-serif;
-              font-weight:700;font-size:12px;color:#00C875;margin-top:8px;">${num}</span>
-          </div>`
+        if (isFirst) {
+          // Círculo verde
+          pickupEl.innerHTML = `
+            <div style="width:34px;height:34px;background:#11191D;border:2.5px solid #00C875;
+              border-radius:50%;display:flex;align-items:center;justify-content:center;
+              font-family:Inter,sans-serif;font-weight:700;font-size:13px;color:#00C875;
+              box-shadow:0 2px 12px rgba(0,200,117,0.4);">
+              ${num}
+            </div>`
+        } else {
+          // Triángulo verde (SVG)
+          pickupEl.innerHTML = `
+            <div style="position:relative;width:36px;height:34px;display:flex;
+              align-items:center;justify-content:center;">
+              <svg width="36" height="34" viewBox="0 0 36 34" style="position:absolute;top:0;left:0;">
+                <polygon points="18,2 1,33 35,33" fill="#11191D"
+                  stroke="#00C875" stroke-width="2.5" stroke-linejoin="round"/>
+              </svg>
+              <span style="position:relative;z-index:1;font-family:Inter,sans-serif;
+                font-weight:700;font-size:12px;color:#00C875;margin-top:8px;">${num}</span>
+            </div>`
+        }
+
+        const pickup = new Marker({ element: pickupEl, anchor: 'center' })
+          .setLngLat([order.pickup.lng, order.pickup.lat])
+          .addTo(map)
+        markersRef.current.push(pickup)
       }
 
-      const pickup = new Marker({ element: pickupEl, anchor: 'center' })
-        .setLngLat([order.pickup.lng, order.pickup.lat])
-        .addTo(map)
-      markersRef.current.push(pickup)
-
-      // ── DROPOFF marker — óvalo naranja ──
+      // ── DROPOFF marker — óvalo naranja, siempre visible ──
       const dropoffEl = document.createElement('div')
       dropoffEl.style.cssText = 'cursor:pointer;'
       dropoffEl.innerHTML = `
