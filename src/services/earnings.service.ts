@@ -1,34 +1,25 @@
-import { MOCK_EARNINGS_SUMMARY } from './mock-data'
 import type { EarningsSummary } from '@/types/earnings'
+
+const EMPTY: EarningsSummary = {
+  total: 0,
+  perHour: 0,
+  perKm: 0,
+  totalOrders: 0,
+  changePercent: 0,
+  activeMinutes: 0,
+  totalKm: 0,
+  hourly: [],
+  byPlatform: [],
+  bestHourRange: '—',
+  bestHourEarnings: 0,
+  additionalEarningsFromVygo: 0,
+  kmSaved: 0,
+  minutesSaved: 0,
+}
 
 export const earningsService = {
   getSummary(_period: 'today' | 'week' | 'month' = 'today'): EarningsSummary {
-    if (_period === 'week') {
-      return {
-        ...MOCK_EARNINGS_SUMMARY,
-        total: 6840,
-        perHour: 204,
-        perKm: 17.8,
-        totalOrders: 82,
-        changePercent: 8.2,
-        additionalEarningsFromVygo: 920,
-        kmSaved: 118,
-        minutesSaved: 223,
-      }
-    }
-    if (_period === 'month') {
-      return {
-        ...MOCK_EARNINGS_SUMMARY,
-        total: 28400,
-        perHour: 198,
-        perKm: 17.2,
-        totalOrders: 340,
-        changePercent: 14.7,
-        additionalEarningsFromVygo: 3840,
-        kmSaved: 480,
-        minutesSaved: 940,
-      }
-    }
-    return MOCK_EARNINGS_SUMMARY
+    // week/month require historical data from backend — return empty until connected
+    return EMPTY
   },
 }

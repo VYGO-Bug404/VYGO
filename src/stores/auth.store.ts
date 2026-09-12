@@ -7,6 +7,7 @@ interface AuthStore {
   email: string | null
   phone: string | null
   userId: string | null
+  fullName: string | null
   login: (email: string, password: string) => Promise<void>
   register: (name: string, email: string, password: string) => Promise<void>
   signInWithApple: () => Promise<void>
@@ -24,11 +25,13 @@ export const useAuthStore = create<AuthStore>()(
       email: null,
       phone: null,
       userId: null,
+      fullName: null,
 
       login: async (email, password) => {
         const { data, error } = await supabase.auth.signInWithPassword({ email, password })
         if (error) throw new Error(error.message)
-        set({ isAuthenticated: true, email: data.user.email ?? email, userId: data.user.id })
+        const name = data.user.user_metadata?.full_name ?? null
+        set({ isAuthenticated: true, email: data.user.email ?? email, userId: data.user.id, fullName: name })
       },
 
       register: async (name, email, password) => {
@@ -39,9 +42,9 @@ export const useAuthStore = create<AuthStore>()(
         })
         if (error) throw new Error(error.message)
         if (data.session) {
-          set({ isAuthenticated: true, email: data.user?.email ?? email, userId: data.user?.id ?? null })
+          set({ isAuthenticated: true, email: data.user?.email ?? email, userId: data.user?.id ?? null, fullName: name })
         } else {
-          set({ isAuthenticated: true, email, userId: data.user?.id ?? null })
+          set({ isAuthenticated: true, email, userId: data.user?.id ?? null, fullName: name })
         }
       },
 
@@ -80,21 +83,22 @@ export const useAuthStore = create<AuthStore>()(
 
       logout: async () => {
         await supabase.auth.signOut()
-        set({ isAuthenticated: false, email: null, phone: null, userId: null })
+        set({ isAuthenticated: false, email: null, phone: null, userId: null, fullName: null })
       },
 
       initSession: async () => {
         const { data } = await supabase.auth.getSession()
         if (data.session) {
+          const meta = data.session.user.user_metadata
           set({
             isAuthenticated: true,
             email: data.session.user.email ?? null,
             phone: data.session.user.phone ?? null,
             userId: data.session.user.id,
+            fullName: meta?.full_name ?? meta?.name ?? null,
           })
         } else {
-          // No valid Supabase session — clear any stale persisted state
-          set({ isAuthenticated: false, email: null, phone: null, userId: null })
+          set({ isAuthenticated: false, email: null, phone: null, userId: null, fullName: null })
         }
       },
     }),
