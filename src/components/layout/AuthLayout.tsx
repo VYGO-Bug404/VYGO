@@ -1,4 +1,5 @@
 import { Outlet } from 'react-router-dom'
+import { VygoLogo } from '@/components/VygoLogo'
 
 export function AuthLayout() {
   return (
@@ -8,6 +9,10 @@ export function AuthLayout() {
       <div className="hidden lg:block pointer-events-none select-none">
         <div className="absolute top-1/4 left-1/3 w-[500px] h-[500px] rounded-full bg-[#C9E86E]/5 blur-[120px]" />
         <div className="absolute bottom-1/3 right-1/4 w-[350px] h-[350px] rounded-full bg-[#6FA800]/6 blur-[100px]" />
+        <div className="absolute top-10 left-12 flex flex-col gap-2">
+          <VygoLogo variant="white" height={52} />
+          <p className="text-[#7880C8] text-sm font-medium">Muévete mejor. Gana más.</p>
+        </div>
         <div className="absolute bottom-10 left-12">
           <p className="text-[#3A4090] text-xs font-medium tracking-wide uppercase">
             DeliveryTech · Monterrey

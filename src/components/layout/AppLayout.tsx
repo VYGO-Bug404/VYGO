@@ -5,6 +5,7 @@ import { useOrdersStore } from '@/stores/orders.store'
 import { useDriverStore } from '@/stores/driver.store'
 import { useNewOrder } from '@/hooks/useNewOrder'
 import { useLocationTracking } from '@/hooks/useLocationTracking'
+import { VygoLogo } from '@/components/VygoLogo'
 import { Zap } from 'lucide-react'
 
 export function AppLayout() {
@@ -29,11 +30,8 @@ export function AppLayout() {
         <div className="absolute bottom-1/3 right-1/4 w-[350px] h-[350px] rounded-full bg-[#6FA800]/6 blur-[100px]" />
 
         {/* VYGO brand — top left */}
-        <div className="absolute top-10 left-12 flex flex-col gap-1">
-          <div className="flex items-center leading-none">
-            <span className="text-5xl font-black text-white tracking-[-2px]">VY</span>
-            <span className="text-5xl font-black text-[#C9E86E] tracking-[-2px]">GO</span>
-          </div>
+        <div className="absolute top-10 left-12 flex flex-col gap-2">
+          <VygoLogo variant="white" height={52} />
           <p className="text-[#7880C8] text-sm font-medium">Muévete mejor. Gana más.</p>
         </div>
 

@@ -4,6 +4,7 @@ import { Mail, Lock, Eye, EyeOff, ArrowLeft, Loader2 } from 'lucide-react'
 import { useAuthStore } from '@/stores/auth.store'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
+import { VygoLogo } from '@/components/VygoLogo'
 
 type Step = 'main' | 'email'
 
@@ -53,7 +54,7 @@ export function LoginPage() {
     >
       {/* Logo */}
       <div className="flex flex-col items-center mb-10">
-        <VygoLogo />
+        <VygoLogo variant="dark" height={48} />
         <p className="text-sm text-vygo-secondary font-medium tracking-wide mt-3">
           Muévete mejor. Gana más.
         </p>
@@ -205,14 +206,6 @@ function SocialButton({
   )
 }
 
-function VygoLogo() {
-  return (
-    <div className="flex items-center">
-      <span className="text-[42px] font-black tracking-[-2px] text-vygo-white leading-none select-none">VY</span>
-      <span className="text-[42px] font-black tracking-[-2px] text-vygo-green leading-none select-none">GO</span>
-    </div>
-  )
-}
 
 function GoogleLogo() {
   return (
