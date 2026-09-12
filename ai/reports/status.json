@@ -1,7 +1,7 @@
 {
-  "generado_en": "2026-09-12T09:00:49+00:00",
-  "bloque": "B0-andamiaje",
-  "commit": "b9a4b55",
+  "generado_en": "2026-09-12T10:25:34+00:00",
+  "bloque": "B1-nucleo-determinista",
+  "commit": "309902b",
   "dirty": true,
   "entorno": {
     "nivel": null,
@@ -9,15 +9,15 @@
     "steps_por_segundo": null
   },
   "tests": {
-    "pasaron": 0,
+    "pasaron": 7,
     "fallaron": 0,
-    "xfail": 6,
+    "xfail": 4,
     "detalle_fallos": []
   },
   "invariantes": {
     "violaciones_frescura": null,
     "violaciones_capacidad": null,
-    "fifo_ok": null,
+    "fifo_ok": true,
     "contabilidad_ok": null,
     "holdout_intacto": null
   },
@@ -65,10 +65,10 @@
   },
   "diagnostico_automatico": [],
   "bloqueos": [
-    "vygo/env.py no está implementado: no existe entorno de simulación L0/L1.",
-    "vygo/geo.py, weather.py, generator.py son stubs sin cuerpo: no hay generador de escenarios.",
-    "sequencer.held_karp, insertion.eval_insertion y feasibility.action_mask tienen firma pero levantan NotImplementedError.",
+    "vygo/env.py no está implementado: no existe entorno de simulación L0/L1 todavía (geo.py, sequencer.py, insertion.py y feasibility.py ya sí).",
+    "vygo/weather.py, generator.py, features.py, baselines.py, train_ppo.py, evaluate.py, export_vygo.py siguen siendo stubs sin cuerpo.",
+    "held_karp con 12 paradas: p95 ~3.2ms sobre el objetivo de 2ms (ver reports/HANDOFF.md, sección de benchmarks, para el detalle de optimizaciones ya aplicadas y las que faltan).",
     "baselines B0-B3 no implementados; scenarios/test_50.pkl todavía no existe."
   ],
-  "siguiente_paso_sugerido": "Implementar vygo/geo.py (rejilla L0) y vygo/generator.py (llegada de pedidos) para tener un VygoEnv mínimo y poder correr python run.py bench."
+  "siguiente_paso_sugerido": "Implementar vygo/weather.py (cadena de Markov) y vygo/generator.py (llegada de pedidos + difusión por rondas) para tener un VygoEnv mínimo L0/L1."
 }

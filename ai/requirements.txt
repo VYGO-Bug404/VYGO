@@ -3,6 +3,7 @@
 # Núcleo numérico y entorno RL
 numpy>=1.26
 gymnasium>=0.29
+numba>=0.60  # JIT del DP de held_karp: en Python puro no cabe en el presupuesto de tiempo
 
 # Entrenamiento (MaskablePPO)
 torch>=2.2
