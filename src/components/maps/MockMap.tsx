@@ -4,6 +4,7 @@ import {
   Marker,
   AttributionControl,
   NavigationControl,
+  LngLatBounds,
   type GeoJSONSource,
   type StyleSpecification,
 } from 'maplibre-gl'
@@ -21,6 +22,7 @@ interface MockMapProps {
   className?: string
   showFullRoute?: boolean
   followDriver?: boolean
+  fitToRoute?: boolean
 }
 
 const MONTERREY: [number, number] = [-100.3161, 25.6866]
@@ -79,6 +81,7 @@ export function MockMap({
   className,
   showFullRoute = false,
   followDriver = false,
+  fitToRoute = false,
 }: MockMapProps) {
   const wrapRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<MLMap | null>(null)
@@ -240,6 +243,25 @@ export function MockMap({
       markersRef.current.push(dropoff)
     })
   }, [activeOrders, ready])
+
+  // ── Fit bounds to pickup/dropoff points ────────────────────
+  // Opt-in static route preview (e.g. completed order detail),
+  // where we want the whole A→B route framed instead of centering
+  // on the driver's last known position.
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map || !ready || !fitToRoute || activeOrders.length === 0) return
+
+    const bounds = new LngLatBounds()
+    activeOrders.forEach((order) => {
+      bounds.extend([order.pickup.lng, order.pickup.lat])
+      bounds.extend([order.dropoff.lng, order.dropoff.lat])
+    })
+
+    if (!bounds.isEmpty()) {
+      map.fitBounds(bounds, { padding: 64, duration: 0, maxZoom: 16 })
+    }
+  }, [activeOrders, ready, fitToRoute])
 
   // ── Driver GPS marker ─────────────────────────────────────
   useEffect(() => {

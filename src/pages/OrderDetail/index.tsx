@@ -1,9 +1,11 @@
+import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { Map, AlertCircle } from 'lucide-react'
+import { Map, AlertCircle, ChevronUp } from 'lucide-react'
 import { useOrdersStore } from '@/stores/orders.store'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { PlatformBadge } from '@/components/PlatformBadge'
 import { OrderTimeline } from '@/components/orders/OrderTimeline'
+import { MockMap, type RouteGeoJSON } from '@/components/maps/MockMap'
 import { Button } from '@/components/ui/button'
 import { formatCurrency, formatCurrencyDecimal, formatDistance, formatMinutes } from '@/lib/utils'
 import { cn } from '@/lib/utils'
@@ -21,6 +23,7 @@ export function OrderDetailPage() {
   const navigate = useNavigate()
   const activeOrders = useOrdersStore((s) => s.activeOrders)
   const completedOrders = useOrdersStore((s) => s.completedOrders)
+  const [showMap, setShowMap] = useState(false)
 
   const order = [...activeOrders, ...completedOrders].find((o) => o.id === id)
 
@@ -37,6 +40,14 @@ export function OrderDetailPage() {
 
   const statusConfig = STATUS_LABELS[order.status] ?? { label: order.status, className: 'bg-vygo-secondary/15 text-vygo-secondary border-vygo-secondary/20' }
   const earningsPerKm = order.earningsPerKm ?? (order.earnings / order.distanceKm)
+
+  const routeGeoJSON: RouteGeoJSON = {
+    type: 'LineString',
+    coordinates: [
+      [order.pickup.lng, order.pickup.lat],
+      [order.dropoff.lng, order.dropoff.lat],
+    ],
+  }
 
   return (
     <div className="flex flex-col min-h-full">
@@ -80,11 +91,44 @@ export function OrderDetailPage() {
           />
         </div>
 
+        {/* Route map */}
+        {showMap && (
+          <div className="bg-vygo-card border border-vygo-border rounded-2xl overflow-hidden">
+            <MockMap
+              activeOrders={[order]}
+              routeGeoJSON={routeGeoJSON}
+              fitToRoute
+              className="w-full h-56"
+            />
+            <div className="flex items-start justify-between gap-3 p-3 text-xs">
+              <div className="flex items-start gap-1.5">
+                <span className="mt-0.5 w-2 h-2 rounded-full bg-vygo-green flex-shrink-0" />
+                <div>
+                  <p className="text-vygo-secondary">Punto A · Recogida</p>
+                  <p className="text-vygo-white font-medium">{order.pickup.address}</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-1.5">
+                <span className="mt-0.5 w-2 h-2 rounded-full bg-vygo-warning flex-shrink-0" />
+                <div>
+                  <p className="text-vygo-secondary">Punto B · Entrega</p>
+                  <p className="text-vygo-white font-medium">{order.dropoff.address}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Actions */}
         <div className="space-y-2">
-          <Button variant="secondary" size="default" className="w-full h-12 gap-2">
-            <Map size={16} />
-            Abrir en Maps
+          <Button
+            variant="secondary"
+            size="default"
+            className="w-full h-12 gap-2"
+            onClick={() => setShowMap((v) => !v)}
+          >
+            {showMap ? <ChevronUp size={16} /> : <Map size={16} />}
+            {showMap ? 'Ocultar mapa' : 'Abrir mapa'}
           </Button>
 
           {order.status !== 'delivered' && (
