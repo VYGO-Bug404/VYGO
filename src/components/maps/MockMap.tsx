@@ -70,8 +70,12 @@ export function MockMap({
   const markersRef = useRef<Marker[]>([])
   const driverRef = useRef<Marker | null>(null)
   const watchRef = useRef<number | null>(null)
+  const followDriverRef = useRef(followDriver)
   const [ready, setReady] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // Keep ref in sync with prop
+  useEffect(() => { followDriverRef.current = followDriver }, [followDriver])
 
   // ── Init map ──────────────────────────────────────────────
   useEffect(() => {
@@ -239,15 +243,24 @@ export function MockMap({
       .addTo(map)
     driverRef.current = marker
 
+    const applyPosition = (pos: GeolocationPosition) => {
+      const lngLat: [number, number] = [pos.coords.longitude, pos.coords.latitude]
+      marker.setLngLat(lngLat)
+      if (followDriverRef.current && mapRef.current) {
+        mapRef.current.easeTo({ center: lngLat, duration: 600, essential: true })
+      }
+    }
+
     if (navigator.geolocation) {
+      // Posición inicial inmediata — centra el mapa al instante
+      navigator.geolocation.getCurrentPosition(applyPosition, () => {}, {
+        enableHighAccuracy: true,
+        timeout: 8000,
+      })
+
+      // Actualizaciones continuas mientras conduce
       watchRef.current = navigator.geolocation.watchPosition(
-        (pos) => {
-          const lngLat: [number, number] = [pos.coords.longitude, pos.coords.latitude]
-          marker.setLngLat(lngLat)
-          if (followDriver && mapRef.current) {
-            mapRef.current.easeTo({ center: lngLat, duration: 800, essential: true })
-          }
-        },
+        applyPosition,
         () => {},
         { enableHighAccuracy: true, maximumAge: 3000 }
       )
