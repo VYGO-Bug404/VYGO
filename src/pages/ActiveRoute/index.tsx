@@ -3,6 +3,7 @@ import { ArrowLeft, ChevronRight, LogOut, TrendingUp, Clock, Package, Zap } from
 import { useOrdersStore } from '@/stores/orders.store'
 import { useRouteStore } from '@/stores/route.store'
 import { useDriverStore } from '@/stores/driver.store'
+
 import { useActiveRoute } from '@/hooks/useActiveRoute'
 import { useEndShift } from '@/hooks/useEndShift'
 import { EndShiftConfirm } from '@/components/EndShiftConfirm'
@@ -23,6 +24,7 @@ export function ActiveRoutePage() {
   const activeOrders = useOrdersStore((s) => s.activeOrders)
   const advanceOrder = useOrdersStore((s) => s.advanceOrder)
   const advanceStop = useRouteStore((s) => s.advanceStop)
+  const routeGeoJSON = useRouteStore((s) => s.routeGeoJSON)
   const { currentStop, nextStop, totalStops } = useActiveRoute()
   const currentStopIndex = useRouteStore((s) => s.currentStopIndex)
 
@@ -183,6 +185,7 @@ export function ActiveRoutePage() {
       {/* MAP — true full screen, behind all overlays */}
       <MockMap
         activeOrders={activeOrders}
+        routeGeoJSON={routeGeoJSON}
         className="absolute inset-0 w-full h-full rounded-none"
         showFullRoute
         followDriver

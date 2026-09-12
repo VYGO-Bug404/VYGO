@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { X, MapPin, Navigation, Zap, Shield, CheckCircle2 } from 'lucide-react'
 import { useOrdersStore } from '@/stores/orders.store'
+import { useRouteStore } from '@/stores/route.store'
 import { PlatformBadge } from '@/components/PlatformBadge'
 import { Button } from '@/components/ui/button'
 import { formatCurrency, formatDistance, formatMinutes } from '@/lib/utils'
@@ -28,7 +29,9 @@ export function NewOrderSheet({ order }: NewOrderSheetProps) {
   const touchStartY = useRef<number | null>(null)
   const acceptOffer = useOrdersStore((s) => s.acceptOffer)
   const rejectOffer = useOrdersStore((s) => s.rejectOffer)
+  const activeOrders = useOrdersStore((s) => s.activeOrders)
   const rhoActual = useOrdersStore((s) => s.currentEarningsPerHour)
+  const setRouteGeoJSON = useRouteStore((s) => s.setRouteGeoJSON)
 
   // #1 — Countdown timer
   useEffect(() => {
@@ -44,7 +47,7 @@ export function NewOrderSheet({ order }: NewOrderSheetProps) {
 
   useEffect(() => {
     setLoading(true)
-    decidir(order, rhoActual).then((resp) => {
+    decidir(order, rhoActual, undefined, activeOrders).then((resp) => {
       setAgentResp(resp)
       setLoading(false)
     })
@@ -70,6 +73,11 @@ export function NewOrderSheet({ order }: NewOrderSheetProps) {
   const handleAccept = async () => {
     setAccepting(true)
     setAccepted(true)
+    // Store route geometry from backend so the map can render it
+    const geo = agentResp?.plan?.geometria
+    if (geo && geo.coordinates.length > 1) {
+      setRouteGeoJSON(geo)
+    }
     await new Promise((r) => setTimeout(r, 600))
     acceptOffer(order)
   }

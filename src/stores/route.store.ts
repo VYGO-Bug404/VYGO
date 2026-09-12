@@ -3,17 +3,22 @@ import type { ActiveRoute } from '@/types/route'
 import type { Order } from '@/types/order'
 import { routeService } from '@/services/route.service'
 
+type RouteGeoJSON = { type: 'LineString'; coordinates: [number, number][] }
+
 interface RouteStore {
   activeRoute: ActiveRoute | null
   currentStopIndex: number
+  routeGeoJSON: RouteGeoJSON | null   // geometry from backend /decidir response
   buildRoute: (orders: Order[]) => void
   advanceStop: () => void
   clearRoute: () => void
+  setRouteGeoJSON: (geo: RouteGeoJSON | null) => void
 }
 
 export const useRouteStore = create<RouteStore>((set, get) => ({
   activeRoute: null,
   currentStopIndex: 0,
+  routeGeoJSON: null,
 
   buildRoute: (orders) => {
     if (orders.length === 0) {
@@ -33,5 +38,7 @@ export const useRouteStore = create<RouteStore>((set, get) => ({
     }
   },
 
-  clearRoute: () => set({ activeRoute: null, currentStopIndex: 0 }),
+  clearRoute: () => set({ activeRoute: null, currentStopIndex: 0, routeGeoJSON: null }),
+
+  setRouteGeoJSON: (geo) => set({ routeGeoJSON: geo }),
 }))

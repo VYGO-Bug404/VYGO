@@ -5,6 +5,7 @@ import { useOrdersStore } from '@/stores/orders.store'
 import { useEndShift } from '@/hooks/useEndShift'
 import { useCountUp } from '@/hooks/useCountUp'
 import { usePlatformConnections } from '@/hooks/usePlatformConnections'
+import { useRouteStore } from '@/stores/route.store'
 import { EndShiftConfirm } from '@/components/EndShiftConfirm'
 import { DriverStatusBadge } from '@/components/DriverStatusBadge'
 import { MockMap } from '@/components/maps/MockMap'
@@ -16,6 +17,7 @@ export function HomePage() {
   const driver = useDriverStore((s) => s.driver)
   const driverStatus = useDriverStore((s) => s.status)
   const { connections: platformConnections } = usePlatformConnections()
+  const routeGeoJSON = useRouteStore((s) => s.routeGeoJSON)
   const todayEarnings = useDriverStore((s) => s.todayEarnings)
   const earningsPerHour = useDriverStore((s) => s.earningsPerHour)
   const completedOrders = useDriverStore((s) => s.completedOrders)
@@ -51,6 +53,7 @@ export function HomePage() {
           <div className="relative">
             <MockMap
               activeOrders={activeOrders}
+              routeGeoJSON={routeGeoJSON}
               className="h-[360px] w-full rounded-none"
               showFullRoute
             />
