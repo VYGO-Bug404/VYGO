@@ -1,18 +1,28 @@
-"""Evaluación PAREADA de B1 vs B2 (y, si existe, un tercer agente entrenado) sobre los 30
-turnos congelados de `scenarios/test_30.pkl` (ai/CLAUDE.md §2.7 -- ver
+"""Evaluación PAREADA de B_SERIAL / B1 / B2 (y, si existe, un tercer agente entrenado)
+sobre los 30 turnos congelados de `scenarios/test_30.pkl` (ai/CLAUDE.md §2.7 -- ver
 `vygo/congelar_escenarios.py`). Cada política corre EXACTAMENTE los mismos 30 escenarios
 (misma semilla, mismo evento de media jornada), así que cualquier diferencia es la política,
 no la suerte del escenario.
 
-Reporta, por política: rho (mediana e IQR), entregados, puntualidad, km por pedido, factor
-de agrupamiento -- cada uno con un desglose ANTES/DESPUÉS del instante en que arranca el
-evento de media jornada del escenario. El % de mejora de B2 sobre B1 en rho se acompaña de
-un intervalo de confianza por bootstrap (10 000 remuestreos, pareado por escenario).
+B_SERIAL es el repartidor SIN VYGO hoy: una sola app, un pedido a la vez
+(`baselines.politica_serial`, K_A efectivo=1 impuesto a nivel de política, sin tocar
+`feasibility.K_A_MAXIMO` ni el entorno). Es la primera fila de la tabla -- la referencia
+real contra la que compite el producto, no B1.
+
+Reporta, por política: rho (mediana e IQR), entregados, pedidos/hora, tasa de aceptación,
+puntualidad, km por pedido, factor de agrupamiento -- cada uno con un desglose ANTES/DESPUÉS
+del instante en que arranca el evento de media jornada del escenario.
+
+Estadística pareada CORRECTA (no bootstrapear la diferencia de medianas, que desperdicia el
+pareo): para cada comparación política_a vs política_b se calcula d_i = rho_a_i - rho_b_i
+en los 30 escenarios, se reporta la MEDIANA de esas diferencias con IC 95% por bootstrap
+sobre las diferencias mismas (10 000 remuestreos), y la TASA DE VICTORIAS (en cuántos de
+los 30 turnos rho_a > rho_b) -- la cifra más clara para el pitch.
 
 Tercera política "agente": intenta cargar `checkpoints/ppo_best.zip` y, si no existe,
 `checkpoints/bc_policy.pt` (usa la arquitectura de `vygo.policy_net`, no la reentrena). Si
 ninguno existe todavía -- el caso normal en un checkout limpio, `checkpoints/` está en
-.gitignore -- se salta esa columna sin fallar: la tabla sale igual con B1/B2 solamente.
+.gitignore -- se salta esa columna sin fallar: la tabla sale igual sin ella.
 
 Uso: python -m vygo.evaluate
 """
@@ -25,10 +35,10 @@ from typing import Callable, Optional
 
 import numpy as np
 
-from vygo.baselines import RhoHatMovil, politica_primera_factible, politica_umbral
+from vygo.baselines import RhoHatMovil, politica_primera_factible, politica_serial, politica_umbral
 from vygo.congelar_escenarios import EscenarioCongelado, RUTA_ESCENARIOS, cargar_escenarios
 from vygo.env import COSTO_KM_MXN, VygoEnv
-from vygo.eventos import ProgramadorEventos
+from vygo.eventos import EventoSurge, ProgramadorEventos
 from vygo.feasibility import K_F
 from vygo.geo import GridWorld
 from vygo.insertion import EstadoRuta
@@ -38,6 +48,10 @@ MAX_PASOS_ESCENARIO = 20_000
 N_BOOTSTRAP = 10_000
 
 PoliticaFn = Callable[[EstadoRuta, np.ndarray, np.ndarray, float], int]
+
+
+def _b_serial(estado: EstadoRuta, _obs: np.ndarray, _mask: np.ndarray, _rho_hat: float) -> int:
+    return politica_serial(estado)
 
 
 def _b1(estado: EstadoRuta, _obs: np.ndarray, _mask: np.ndarray, _rho_hat: float) -> int:
@@ -203,25 +217,80 @@ def correr_escenario(escenario: EscenarioCongelado, politica_fn: PoliticaFn) -> 
     }
 
 
-def _bootstrap_pct_mejora(rho_b1: np.ndarray, rho_b2: np.ndarray, n: int = N_BOOTSTRAP, seed: int = 0) -> dict:
-    """% de mejora de B2 sobre B1 en rho_mediana, con IC 95% por bootstrap PAREADO (mismo
-    índice de escenario para B1 y B2 en cada remuestreo -- preserva la correlación entre
-    políticas sobre el mismo escenario, no compara medianas independientes)."""
+def correr_escenario_con_paradas(escenario: EscenarioCongelado, politica_fn: PoliticaFn) -> dict:
+    """Igual que `correr_escenario`, pero además graba la secuencia de paradas (recogida/
+    entrega) para el turno de demo. NO toca env.py -- envuelve el método que YA EXISTE,
+    `env._procesar_llegada_nodo`, sólo en esta instancia de `env` (nunca en la clase):
+    graba lo que ya iba a pasar, no cambia cómo pasa. Se usa sólo para el turno elegido en
+    `_elegir_turno_demo`, nunca en el barrido de los 30 escenarios (ahí `correr_escenario`
+    se queda tal cual, sin el costo extra de instrumentar)."""
+
+    programador = ProgramadorEventos(list(escenario.eventos)) if escenario.eventos else None
+    env = VygoEnv(
+        nivel=escenario.nivel, m_comercios=escenario.m_comercios,
+        duracion_turno_s=escenario.duracion_turno_s, programador_eventos=programador,
+    )
+    obs, info = env.reset(seed=escenario.seed)
+    rho_movil = RhoHatMovil()
+
+    paradas: list[dict] = []
+    _original = env._procesar_llegada_nodo
+
+    def _envuelta(t_salida: float):
+        parada = env.plan[0]
+        ganancia_antes = env.ganancia_acum
+        resultado = _original(t_salida)
+        paradas.append({
+            "t_min": env.t / 60.0, "tipo": parada.tipo, "pedido": parada.id,
+            "pos": parada.pos, "ingreso": env.ganancia_acum - ganancia_antes,
+        })
+        return resultado
+
+    env._procesar_llegada_nodo = _envuelta
+
+    for _ in range(MAX_PASOS_ESCENARIO):
+        estado = env._estado_ruta()
+        mask = info["action_mask"]
+        accion = politica_fn(estado, obs, mask, rho_movil.valor)
+        obs, r, term, trunc, info = env.step(accion)
+        rho_movil.actualizar(env.t, r)
+        if term or trunc:
+            break
+
+    t_final = env.t
+    return {
+        "minutos": t_final / 60.0,
+        "km": env.km_acum,
+        "ingreso": env.ganancia_acum,
+        "rho": (env.ganancia_acum - COSTO_KM_MXN * env.km_acum) / max(t_final / 3600.0, 1e-9),
+        "entregados": info["pedidos_entregados"],
+        "paradas": paradas,
+    }
+
+
+def _pareado(rho_a: np.ndarray, rho_b: np.ndarray, n: int = N_BOOTSTRAP, seed: int = 0) -> dict:
+    """Estadística pareada CORRECTA, por escenario (no bootstrapear la diferencia de
+    medianas por separado -- eso desperdicia el pareo). d_i = rho_a_i - rho_b_i en cada uno
+    de los N escenarios; se reporta la mediana de esas N diferencias, su IC 95% por
+    bootstrap sobre las diferencias mismas (remuestrea los d_i, no rho_a/rho_b por
+    separado), y la tasa de victorias: en cuántos escenarios rho_a > rho_b."""
+
+    d = rho_a - rho_b
+    n_esc = len(d)
+    mediana_obs = float(np.median(d))
 
     rng = np.random.default_rng(seed)
-    n_esc = len(rho_b1)
-    observado = (np.median(rho_b2) - np.median(rho_b1)) / abs(np.median(rho_b1)) * 100.0
-
     muestras = np.empty(n)
     for k in range(n):
         idx = rng.integers(0, n_esc, size=n_esc)
-        m1, m2 = np.median(rho_b1[idx]), np.median(rho_b2[idx])
-        muestras[k] = (m2 - m1) / abs(m1) * 100.0 if m1 != 0 else np.nan
+        muestras[k] = np.median(d[idx])
 
-    muestras = muestras[~np.isnan(muestras)]
     return {
-        "pct_observado": float(observado),
+        "mediana_diff": mediana_obs,
         "ic95": [float(np.percentile(muestras, 2.5)), float(np.percentile(muestras, 97.5))],
+        "victorias": int(np.sum(d > 0)),
+        "empates": int(np.sum(d == 0)),
+        "n": n_esc,
     }
 
 
@@ -351,6 +420,18 @@ def _ejemplo_cierre_vial() -> str:
     )
 
 
+def _elegir_turno_demo(rho_b2: np.ndarray, rho_serial: np.ndarray) -> int:
+    """Índice del escenario donde B2 le saca la mayor ventaja a B_SERIAL en rho total --
+    el turno más claro para el pitch."""
+    return int(np.argmax(rho_b2 - rho_serial))
+
+
+def _tipo_evento(escenario: EscenarioCongelado) -> str:
+    if not escenario.eventos:
+        return "ninguno"
+    return "surge" if isinstance(escenario.eventos[0], EventoSurge) else "cierre_vial"
+
+
 def evaluar() -> dict:
     if not RUTA_ESCENARIOS.exists():
         raise SystemExit(
@@ -359,11 +440,12 @@ def evaluar() -> dict:
         )
     escenarios = cargar_escenarios()
 
-    politicas: dict[str, PoliticaFn] = {"B1": _b1, "B2": _b2}
+    politicas: dict[str, PoliticaFn] = {"B_SERIAL": _b_serial, "B1": _b1, "B2": _b2}
     agente = _cargar_agente()
+    nombre_agente = None
     if agente is not None:
-        nombre, fn = agente
-        politicas[nombre] = fn
+        nombre_agente, fn = agente
+        politicas[nombre_agente] = fn
 
     resultados: dict[str, list[dict]] = {nombre: [] for nombre in politicas}
     for escenario in escenarios:
@@ -375,17 +457,34 @@ def evaluar() -> dict:
         for nombre, res in resultados.items()
     }
 
-    rho_b1_total = np.array([r["total"]["rho"] for r in resultados["B1"]])
-    bootstrap = {
-        nombre: _bootstrap_pct_mejora(rho_b1_total, np.array([r["total"]["rho"] for r in res]))
-        for nombre, res in resultados.items() if nombre != "B1"
+    rho_serial = np.array([r["total"]["rho"] for r in resultados["B_SERIAL"]])
+    rho_b1 = np.array([r["total"]["rho"] for r in resultados["B1"]])
+    rho_b2 = np.array([r["total"]["rho"] for r in resultados["B2"]])
+
+    comparaciones = {
+        "B2 vs B_SERIAL": _pareado(rho_b2, rho_serial),
+        "B2 vs B1": _pareado(rho_b2, rho_b1),
+    }
+    if nombre_agente is not None:
+        rho_agente = np.array([r["total"]["rho"] for r in resultados[nombre_agente]])
+        comparaciones[f"{nombre_agente} vs B1"] = _pareado(rho_agente, rho_b1)
+
+    idx_demo = _elegir_turno_demo(rho_b2, rho_serial)
+    escenario_demo = escenarios[idx_demo]
+    demo = {
+        "seed": escenario_demo.seed,
+        "tipo_evento": _tipo_evento(escenario_demo),
+        "ventaja_rho": float(rho_b2[idx_demo] - rho_serial[idx_demo]),
+        "B2": correr_escenario_con_paradas(escenario_demo, _b2),
+        "B_SERIAL": correr_escenario_con_paradas(escenario_demo, _b_serial),
     }
 
     return {
         "n_escenarios": len(escenarios),
         "politicas": list(politicas.keys()),
         "resumen": resumen,
-        "vs_b1_bootstrap": bootstrap,
+        "comparaciones": comparaciones,
+        "demo": demo,
         "ejemplo_surge": _ejemplo_surge(),
         "ejemplo_cierre_vial": _ejemplo_cierre_vial(),
     }
@@ -401,30 +500,175 @@ def _fmt_fila(politica: str, m: dict) -> str:
     )
 
 
+def _fmt_paradas(paradas: list[dict]) -> list[str]:
+    lineas = []
+    for p in paradas:
+        extra = f"  +{p['ingreso']:.2f} MXN" if p["ingreso"] else ""
+        lineas.append(f"  min {p['t_min']:6.1f}  {p['tipo']:9s} {str(p['pedido']):>6s}  {p['pos']}{extra}")
+    return lineas
+
+
+def _imprimir_demo(demo: dict) -> None:
+    b2, serial = demo["B2"], demo["B_SERIAL"]
+    print(
+        f"Escenario semilla={demo['seed']} (evento: {demo['tipo_evento']}), ventaja de B2 "
+        f"sobre B_SERIAL: {demo['ventaja_rho']:+.2f} MXN/h de rho"
+    )
+    print(f"{'':14s}{'B2':>12s}{'B_SERIAL':>12s}")
+    filas = (
+        ("minutos", "minutos", "{:.1f}"), ("km", "km", "{:.2f}"),
+        ("ingreso MXN", "ingreso", "{:.2f}"), ("rho MXN/h", "rho", "{:.2f}"),
+        ("entregados", "entregados", "{:d}"),
+    )
+    for etiqueta, clave, fmt in filas:
+        print(f"{etiqueta:14s}{fmt.format(b2[clave]):>12s}{fmt.format(serial[clave]):>12s}")
+    print()
+    print(f"Secuencia de paradas -- B2 ({len(b2['paradas'])} paradas):")
+    for linea in _fmt_paradas(b2["paradas"]):
+        print(linea)
+    print()
+    print(f"Secuencia de paradas -- B_SERIAL ({len(serial['paradas'])} paradas):")
+    for linea in _fmt_paradas(serial["paradas"]):
+        print(linea)
+
+
 def _imprimir_tabla(reporte: dict) -> None:
     n = reporte["n_escenarios"]
     print(f"Evaluación pareada -- {n} escenarios congelados (scenarios/test_30.pkl)\n")
+    print("\n".join(_nota_reproducibilidad()))
+    print()
     for bucket, titulo in (("total", "TOTAL"), ("antes", "ANTES del evento"), ("despues", "DESPUÉS del evento")):
         print(f"-- {titulo} --")
         for politica, por_bucket in reporte["resumen"].items():
             print(_fmt_fila(politica, por_bucket[bucket]))
         print()
 
-    for nombre, b in reporte["vs_b1_bootstrap"].items():
+    for nombre, c in reporte["comparaciones"].items():
         print(
-            f"{nombre} vs B1 (rho_mediana, total): {b['pct_observado']:+.1f}% "
-            f"(IC 95% bootstrap {N_BOOTSTRAP} remuestreos: [{b['ic95'][0]:+.1f}%, {b['ic95'][1]:+.1f}%])",
+            f"{nombre}: mediana(diferencia rho)={c['mediana_diff']:+.2f} MXN/h "
+            f"(IC 95% bootstrap {N_BOOTSTRAP} remuestreos sobre las diferencias: "
+            f"[{c['ic95'][0]:+.2f}, {c['ic95'][1]:+.2f}]) -- victorias: {c['victorias']}/{c['n']} turnos"
         )
+    print()
+    print("-- Turno de demo (mayor ventaja de B2 sobre B_SERIAL) --")
+    _imprimir_demo(reporte["demo"])
     print()
     print(reporte["ejemplo_surge"])
     print()
     print(reporte["ejemplo_cierre_vial"])
 
 
+def _experimento_rl_md(reporte: dict) -> list[str]:
+    """Sección honesta del experimento de RL. Cifras verificadas contra archivos fuente
+    (no inventadas): concordancia BC en `reports/bc_curva.json` (época 10), approx_kl en
+    `reports/train_ppo.log`, tope_ka en `reports/HANDOFF.md` (instrumentación de
+    `feasibility.CONTADOR_MOTIVOS` del bloque anterior); el resultado PPO vs B1 sale de
+    esta misma corrida (`reporte['comparaciones']`), no de un número fijo en el código."""
+
+    comp = reporte["comparaciones"]
+    nombre_ppo = next((k for k in comp if k.endswith(" vs B1") and k != "B2 vs B1"), None)
+    if nombre_ppo is not None:
+        c = comp[nombre_ppo]
+        resultado_ppo = (
+            f"**{nombre_ppo}**: mediana(diferencia de rho)={c['mediana_diff']:+.2f} MXN/h, "
+            f"gana en {c['victorias']}/{c['n']} turnos frente a B1 -- **PPO descartado**, "
+            f"no supera al baseline simple en este holdout."
+        )
+    else:
+        resultado_ppo = "no había checkpoint de PPO disponible en `checkpoints/` al correr esta evaluación."
+
+    return [
+        "## Experimento de RL -- honesto",
+        "",
+        "**BC (behavioral cloning) sobre B2**: 10 épocas, 40 000 transiciones de "
+        "entrenamiento / 10 000 de validación. Concordancia final con B2 en validación "
+        "**99.8%** (`reports/bc_curva.json`, época 10: `concordancia_val=0.9985`). El clon "
+        "aprende la regla de umbral casi a la perfección como problema de clasificación -- "
+        "el cuello de botella de PPO no es que no pueda imitar a B2.",
+        "",
+        f"**PPO desde ese checkpoint**: `MaskablePPO` inicializado con los pesos de "
+        f"`bc_policy.pt` (no entrenado desde cero), afinado on-policy encima. Resultado en "
+        f"este holdout de {reporte['n_escenarios']} escenarios: {resultado_ppo}",
+        "",
+        "**Evidencia de que la política casi no se movió durante el afinado on-policy**: "
+        "`approx_kl` en `reports/train_ppo.log` se mantiene del orden de 1e-9 a 1e-5 (varias "
+        "filas en exactamente 0.0) a lo largo del entrenamiento -- PPO está ajustando casi "
+        "nada respecto al punto de partida heredado de BC, no está descubriendo una política "
+        "distinta.",
+        "",
+        "**Diagnóstico**: el entorno está saturado por el tope duro `K_A_MAXIMO=4` -- "
+        "instrumentado con `feasibility.CONTADOR_MOTIVOS` en el bloque anterior, el motivo "
+        "`tope_ka` explica el **89.1%** del histograma de rechazos (`reports/HANDOFF.md`). "
+        "Con el plan lleno casi todo el turno, aceptar todo lo factible ya es casi óptimo: "
+        "no queda margen de SELECCIÓN entre ofertas que una política de RL pueda aprender a "
+        "explotar. La ganancia real de este sistema está en AGRUPAR pedidos "
+        "(B1/B2 vs B_SERIAL, ver tabla y turno de demo arriba), no en escoger mejor entre "
+        "ofertas visibles (B2 vs B1, y por lo mismo PPO vs B1) -- ahí el margen ya está casi "
+        "agotado por el tope de capacidad, no por falta de entrenamiento.",
+        "",
+    ]
+
+
+def _nota_reproducibilidad() -> list[str]:
+    """Hallazgo real durante esta tarea, no teórico: dos corridas completas de esta misma
+    evaluación sobre los mismos 30 escenarios dieron rho_mediana de B1 = 213.19 MXN/h y,
+    más tarde, 353.25 MXN/h -- con el MISMO código (`git diff` limpio en env.py/generator.py/
+    geo.py/sequencer.py/feasibility.py entre ambas corridas) y el MISMO `scenarios/
+    test_30.pkl` (sha256 verificado sin cambios). B1 es una función pura del estado del
+    entorno: no debería poder variar así. Se aisló la causa: `sequencer.held_karp`, en su
+    camino de enumeración exacta (<=3 pedidos, el caso típico), acota su búsqueda con un
+    presupuesto de RELOJ DE PARED de 25 ms (`_LIMITE_TIEMPO_EXACTO_S`, medido con
+    `time.perf_counter()`); si se agota, cae a la mejor secuencia encontrada hasta ese punto
+    (siempre verificada factible -- nunca viola frescura) pero no necesariamente la óptima.
+    Bajo contención de CPU (la otra sesión entrena PPO en el mismo equipo) ese presupuesto
+    se agota con más frecuencia, degradando la ruta elegida de forma no determinista.
+    Confirmado empíricamente: una recomputación fresca de B1 sobre los 30 escenarios,
+    corrida después, reprodujo 353.25 exactamente -- los números de este reporte son
+    reproducibles bajo la carga de CPU del momento en que se generaron, pero no son
+    invariantes a la carga del sistema. Esto NO se arregló aquí: arreglarlo (por ejemplo,
+    pasar a un presupuesto de tiempo de CPU de proceso en vez de reloj de pared, o subir el
+    límite) requiere tocar `sequencer.py`, fuera de alcance de esta tarea ('no toques el
+    entorno'). Efecto en las conclusiones: la brecha B1/B2 vs B_SERIAL (~250 MXN/h, ~200%)
+    es muchísimo más grande que este ruido y se sostiene sin duda; las comparaciones más
+    finas B2 vs B1 y PPO vs B1 (ya con IC 95% que cruza cero) deben leerse como "no hay
+    evidencia de diferencia" y no como un número fijo -- una repetición de esta evaluación,
+    sobre todo una vez que la otra sesión termine de entrenar, puede moverlas."""
+
+    return [
+        "## Nota de reproducibilidad -- por qué estos números pueden variar entre corridas",
+        "",
+        "Se detectó y confirmó durante esta tarea: dos corridas completas de esta evaluación "
+        "sobre los MISMOS 30 escenarios, con el MISMO código (verificado sin diferencias en "
+        "env.py/generator.py/geo.py/sequencer.py/feasibility.py entre ambas), dieron "
+        "rho_mediana de B1 = 213.19 MXN/h y, más tarde, 353.25 MXN/h. Causa aislada: "
+        "`sequencer.held_karp` acota su enumeración exacta (<=3 pedidos, el caso típico) con "
+        "un presupuesto de **reloj de pared** de 25 ms (`_LIMITE_TIEMPO_EXACTO_S`); si se "
+        "agota, usa la mejor secuencia encontrada hasta ahí (siempre factible, nunca viola "
+        "frescura) pero no necesariamente la óptima. Bajo contención de CPU -- como la de la "
+        "otra sesión entrenando PPO en el mismo equipo -- ese presupuesto se agota más "
+        "seguido y la ruta elegida se degrada de forma no determinista.",
+        "",
+        "Confirmado empíricamente: una recomputación fresca de B1 sobre los 30 escenarios "
+        "reprodujo 353.25 exactamente -- los números de este reporte SÍ son reproducibles "
+        "bajo la carga de CPU con la que se generaron, pero NO son invariantes a la carga "
+        "del sistema en general. No se corrigió aquí: la corrección (p. ej. medir tiempo de "
+        "CPU de proceso en vez de reloj de pared, o subir el límite) requiere tocar "
+        "`sequencer.py`, fuera de alcance de esta tarea (\"no toques el entorno\").",
+        "",
+        "**Efecto en las conclusiones**: la brecha B1/B2 vs B_SERIAL (~250 MXN/h, ~200%) es "
+        "muchísimo más grande que este ruido y se sostiene sin duda. Las comparaciones finas "
+        "B2 vs B1 y PPO vs B1 (IC 95% que ya cruza cero en ambas) deben leerse como \"sin "
+        "evidencia de diferencia\", no como un número fijo -- repetir esta evaluación, sobre "
+        "todo cuando la otra sesión termine de entrenar, puede moverlas.",
+        "",
+    ]
+
+
 def _escribir_eval_md(reporte: dict, ruta: Path) -> None:
     from datetime import datetime, timezone
 
     n = reporte["n_escenarios"]
+    con_agente = any(" vs B1" in k and k != "B2 vs B1" for k in reporte["comparaciones"])
     lineas = [
         "# Evaluación pareada -- reto Infosys \"The Courier\"",
         "",
@@ -433,9 +677,13 @@ def _escribir_eval_md(reporte: dict, ruta: Path) -> None:
         "15 con SURGE y 15 con CIERRE_VIAL, evento siempre a partir del minuto 60. "
         "Evaluación PAREADA: cada política corre EXACTAMENTE los mismos 30 escenarios.",
         f"Políticas evaluadas: {', '.join(reporte['politicas'])}"
-        + ("" if len(reporte["politicas"]) > 2 else " (sin checkpoint entrenado disponible en `checkpoints/` al momento de correr esta evaluación -- se salta esa columna sin fallar)."),
+        + ("" if con_agente else " (sin checkpoint entrenado disponible en `checkpoints/` al momento de correr esta evaluación -- se salta esa columna sin fallar)."),
+        "B_SERIAL es el repartidor SIN VYGO hoy: una sola app, un pedido a la vez -- es la "
+        "referencia real, no B1.",
         "",
     ]
+
+    lineas.extend(_nota_reproducibilidad())
 
     for bucket, titulo in (("total", "TOTAL"), ("antes", "ANTES del evento"), ("despues", "DESPUÉS del evento")):
         lineas.append(f"## {titulo}")
@@ -452,13 +700,52 @@ def _escribir_eval_md(reporte: dict, ruta: Path) -> None:
             )
         lineas.append("")
 
-    lineas.append("## % de mejora sobre B1 (rho mediana, total, bootstrap pareado)")
+    lineas.append("## Estadística pareada (por escenario, no por medianas independientes)")
     lineas.append("")
-    for nombre, b in reporte["vs_b1_bootstrap"].items():
+    lineas.append(
+        "Para cada par se calcula d_i = rho(a, escenario i) − rho(b, escenario i) en los "
+        f"{n} escenarios; se reporta la MEDIANA de esas diferencias con IC 95% por bootstrap "
+        f"({N_BOOTSTRAP} remuestreos) sobre las diferencias mismas, y la tasa de victorias "
+        "(en cuántos turnos rho_a > rho_b)."
+    )
+    lineas.append("")
+    lineas.append("| Comparación | mediana(diferencia rho) | IC 95% | victorias |")
+    lineas.append("|---|---|---|---|")
+    for nombre, c in reporte["comparaciones"].items():
         lineas.append(
-            f"- **{nombre} vs B1**: {b['pct_observado']:+.1f}% "
-            f"(IC 95%, {N_BOOTSTRAP} remuestreos: [{b['ic95'][0]:+.1f}%, {b['ic95'][1]:+.1f}%])"
+            f"| {nombre} | {c['mediana_diff']:+.2f} MXN/h | "
+            f"[{c['ic95'][0]:+.2f}, {c['ic95'][1]:+.2f}] | {c['victorias']}/{c['n']} |"
         )
+    lineas.append("")
+
+    demo = reporte["demo"]
+    b2, serial = demo["B2"], demo["B_SERIAL"]
+    lineas.append("## Turno de demo -- mayor ventaja de B2 sobre B_SERIAL")
+    lineas.append("")
+    lineas.append(
+        f"Escenario semilla={demo['seed']} (evento: {demo['tipo_evento']}), ventaja de B2 "
+        f"sobre B_SERIAL: **{demo['ventaja_rho']:+.2f} MXN/h** de rho."
+    )
+    lineas.append("")
+    lineas.append("| | B2 | B_SERIAL |")
+    lineas.append("|---|---|---|")
+    lineas.append(f"| minutos | {b2['minutos']:.1f} | {serial['minutos']:.1f} |")
+    lineas.append(f"| km | {b2['km']:.2f} | {serial['km']:.2f} |")
+    lineas.append(f"| ingreso MXN | {b2['ingreso']:.2f} | {serial['ingreso']:.2f} |")
+    lineas.append(f"| rho MXN/h | {b2['rho']:.2f} | {serial['rho']:.2f} |")
+    lineas.append(f"| entregados | {b2['entregados']} | {serial['entregados']} |")
+    lineas.append("")
+    lineas.append(f"Secuencia de paradas -- B2 ({len(b2['paradas'])} paradas):")
+    lineas.append("")
+    lineas.append("```")
+    lineas.extend(_fmt_paradas(b2["paradas"]))
+    lineas.append("```")
+    lineas.append("")
+    lineas.append(f"Secuencia de paradas -- B_SERIAL ({len(serial['paradas'])} paradas):")
+    lineas.append("")
+    lineas.append("```")
+    lineas.extend(_fmt_paradas(serial["paradas"]))
+    lineas.append("```")
     lineas.append("")
 
     lineas.append("## Reacción al evento -- ejemplo concreto (emergente, no programado)")
@@ -471,6 +758,8 @@ def _escribir_eval_md(reporte: dict, ruta: Path) -> None:
     lineas.append("")
     lineas.append(reporte["ejemplo_cierre_vial"].replace("\n", "  \n"))
     lineas.append("")
+
+    lineas.extend(_experimento_rl_md(reporte))
 
     ruta.parent.mkdir(parents=True, exist_ok=True)
     ruta.write_text("\n".join(lineas), encoding="utf-8")

@@ -1,7 +1,9 @@
-"""B0 aleatoria, B1 acepta-primera-factible, B2 umbral (con y sin p_gana). ai/CLAUDE.md §9,
-docs/vygo-ai-training.md §6.1. B1 es el "baseline simple" del reto (comportamiento FIFO de
-un repartidor novato); B2 es el serio (regla de umbral, docs/modelo-matematico.md §4.6);
-B2-ingenuo es B2 sin el factor p_gana, para medir cuánto vale entender la competencia.
+"""B0 aleatoria, B_SERIAL (una app, sin agrupamiento), B1 acepta-primera-factible, B2 umbral
+(con y sin p_gana). ai/CLAUDE.md §9, docs/vygo-ai-training.md §6.1. B_SERIAL es el
+repartidor SIN VYGO hoy (una sola app, un pedido a la vez); B1 es el "baseline simple" del
+reto (comportamiento FIFO pero con agrupamiento ya permitido); B2 es el serio (regla de
+umbral, docs/modelo-matematico.md §4.6); B2-ingenuo es B2 sin el factor p_gana, para medir
+cuánto vale entender la competencia.
 """
 
 from __future__ import annotations
@@ -48,6 +50,25 @@ def politica_aleatoria(estado: EstadoRuta, rng: np.random.Generator) -> int:
 
 def politica_primera_factible(estado: EstadoRuta) -> int:
     """B1: acepta la primera oferta factible en orden de slot; si ninguna, rechazar_todas."""
+    mask = action_mask(estado)
+    for i in range(K_F):
+        if mask[i]:
+            return i
+    return K_F
+
+
+def politica_serial(estado: EstadoRuta) -> int:
+    """B_SERIAL: el repartidor SIN VYGO -- una sola app, sin agrupamiento. Igual que B1
+    (acepta la primera oferta factible) pero nunca lleva más de un pedido en curso: mientras
+    el plan activo ya tenga >=1 pedido, rechaza todo hasta entregarlo.
+
+    Impuesto aquí, a nivel de POLÍTICA, sin tocar `feasibility.K_A_MAXIMO` (sigue en 4 para
+    el entorno y para B1/B2 -- esta tarea pidió explícitamente no tocar el entorno). El
+    efecto es idéntico al de correr con K_A_MAXIMO=1: el entorno seguiría permitiendo hasta
+    4, pero esta política nunca pide más de 1."""
+
+    if n_pedidos_en_plan(estado.plan) >= 1:
+        return K_F
     mask = action_mask(estado)
     for i in range(K_F):
         if mask[i]:
