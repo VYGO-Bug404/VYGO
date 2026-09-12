@@ -1,12 +1,11 @@
 import { create } from 'zustand'
-import type { DriverState } from '@/types/driver'
+import type { DriverState, DriverStatus } from '@/types/driver'
 import { driverService } from '@/services/driver.service'
 
-interface DriverStore extends DriverState {
+interface DriverStore extends Omit<DriverState, 'activeMinutes'> {
   startShift: () => void
   endShift: () => void
-  addEarnings: (amount: number) => void
-  incrementCompletedOrders: () => void
+  setStatus: (status: DriverStatus) => void
 }
 
 export const useDriverStore = create<DriverStore>((set) => ({
@@ -16,11 +15,10 @@ export const useDriverStore = create<DriverStore>((set) => ({
   earningsPerHour: driverService.getEarningsPerHour(),
   completedOrders: driverService.getCompletedOrdersCount(),
   shiftStartedAt: null,
-  activeMinutes: 0,
 
   startShift: () =>
     set({
-      status: 'active_route',
+      status: 'online',
       shiftStartedAt: new Date(),
     }),
 
@@ -30,13 +28,5 @@ export const useDriverStore = create<DriverStore>((set) => ({
       shiftStartedAt: null,
     }),
 
-  addEarnings: (amount) =>
-    set((state) => ({
-      todayEarnings: state.todayEarnings + amount,
-    })),
-
-  incrementCompletedOrders: () =>
-    set((state) => ({
-      completedOrders: state.completedOrders + 1,
-    })),
+  setStatus: (status) => set({ status }),
 }))

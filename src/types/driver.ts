@@ -31,5 +31,4 @@ export interface DriverState {
   earningsPerHour: number
   completedOrders: number
   shiftStartedAt: Date | null
-  activeMinutes: number
 }

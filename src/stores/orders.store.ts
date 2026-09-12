@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import type { Order, OrderStatus } from '@/types/order'
 import { ordersService } from '@/services/orders.service'
+import { useDriverStore } from '@/stores/driver.store'
 
 interface OrdersStore {
   activeOrders: Order[]
@@ -42,6 +43,7 @@ export const useOrdersStore = create<OrdersStore>((set, get) => ({
       currentEarningsPerHour: projected,
       _nextRouteNumber: state._nextRouteNumber + 1,
     }))
+    useDriverStore.getState().setStatus('active_route')
   },
 
   rejectOffer: () => set({ pendingOffer: null }),
@@ -54,8 +56,12 @@ export const useOrdersStore = create<OrdersStore>((set, get) => ({
       if (status === 'delivered') {
         const order = state.activeOrders.find((o) => o.id === id)
         const delivered = order ? { ...order, status: 'delivered' as const, deliveredAt: new Date() } : null
+        const remaining = state.activeOrders.filter((o) => o.id !== id)
+        if (remaining.length === 0) {
+          useDriverStore.getState().setStatus('online')
+        }
         return {
-          activeOrders: state.activeOrders.filter((o) => o.id !== id),
+          activeOrders: remaining,
           completedOrders: delivered
             ? [...state.completedOrders, delivered]
             : state.completedOrders,

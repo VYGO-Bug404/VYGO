@@ -68,7 +68,7 @@ export function ProfilePage() {
             </div>
           </div>
           <div className="text-center">
-            <h2 className="text-xl font-semibold text-vygo-white">{driver.name} Gabuardi</h2>
+            <h2 className="text-xl font-semibold text-vygo-white">{driver.name}</h2>
             <p className="text-sm text-vygo-secondary">Repartidor verificado</p>
           </div>
 

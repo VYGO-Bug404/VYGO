@@ -77,7 +77,7 @@ export function RegisterPage() {
         <Input
           label="Nombre completo"
           type="text"
-          placeholder="Luis Gabuardi"
+          placeholder="Juan Pérez"
           value={form.name}
           onChange={set('name')}
           error={errors.name}
