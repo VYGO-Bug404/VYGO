@@ -4,17 +4,17 @@ import type { Platform } from '@/types/order'
 const PLATFORM_CONFIG: Record<Platform, { label: string; className: string; dot: string }> = {
   uber: {
     label: 'Uber',
-    className: 'bg-white/10 text-white border-white/20',
-    dot: 'bg-white',
+    className: 'bg-slate-100 text-slate-800 border-slate-300',
+    dot: 'bg-slate-700',
   },
   rappi: {
     label: 'Rappi',
-    className: 'bg-red-500/15 text-red-400 border-red-500/20',
+    className: 'bg-red-50 text-red-600 border-red-200',
     dot: 'bg-red-500',
   },
   didi: {
     label: 'DiDi',
-    className: 'bg-orange-500/15 text-orange-400 border-orange-500/20',
+    className: 'bg-orange-50 text-orange-600 border-orange-200',
     dot: 'bg-orange-500',
   },
 }
