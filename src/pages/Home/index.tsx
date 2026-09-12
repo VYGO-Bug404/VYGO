@@ -55,7 +55,7 @@ export function HomePage() {
               showFullRoute
             />
             <div className="absolute bottom-0 left-0 right-0 px-3 pb-3">
-              <div className="bg-vygo-bg/85 backdrop-blur-xl border border-vygo-border rounded-2xl px-4 py-3 flex items-center">
+              <div className="bg-white/85 backdrop-blur-xl border border-vygo-border rounded-2xl px-4 py-3 flex items-center">
                 <div className="flex-1 flex flex-col items-center">
                   <div className="flex items-center gap-1.5">
                     <span className="text-xl font-bold text-vygo-green text-money">
@@ -165,7 +165,7 @@ export function HomePage() {
               activeOrders={[]}
               className="h-[180px] w-full"
             />
-            <div className="absolute inset-0 flex items-center justify-center bg-vygo-bg/40 backdrop-blur-[1px]">
+            <div className="absolute inset-0 flex items-center justify-center bg-white/50 backdrop-blur-[1px]">
               <div className="flex items-center gap-2 bg-vygo-card/90 border border-vygo-border rounded-full px-3 py-1.5">
                 <MapPin size={12} className="text-vygo-green" />
                 <span className="text-xs text-vygo-secondary font-medium">Tu zona · Monterrey</span>

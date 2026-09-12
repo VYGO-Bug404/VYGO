@@ -218,7 +218,7 @@ export function ActiveRoutePage() {
         className="absolute left-3 right-3 z-20"
         style={{ top: `max(env(safe-area-inset-top, 0px), 12px)` }}
       >
-        <div className="flex items-center gap-2 bg-vygo-card/90 backdrop-blur-xl rounded-2xl border border-vygo-border px-3 py-2.5 shadow-card">
+        <div className="flex items-center gap-2 bg-white/90 backdrop-blur-xl rounded-2xl border border-vygo-border px-3 py-2.5 shadow-card">
           <button
             onClick={() => navigate(-1)}
             className="w-8 h-8 flex items-center justify-center rounded-xl bg-vygo-card-2 border border-vygo-border text-vygo-secondary flex-shrink-0"
@@ -256,7 +256,7 @@ export function ActiveRoutePage() {
         className="absolute left-3 right-3 z-20"
         style={{ bottom: `max(env(safe-area-inset-bottom, 0px), 12px)` }}
       >
-        <div className="bg-vygo-card/92 backdrop-blur-xl rounded-2xl border border-vygo-border shadow-sheet overflow-hidden">
+        <div className="bg-white/92 backdrop-blur-xl rounded-2xl border border-vygo-border shadow-sheet overflow-hidden">
           {/* Progress bar */}
           <div className="h-[3px] bg-vygo-border">
             <div

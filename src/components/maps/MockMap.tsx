@@ -306,7 +306,7 @@ export function MockMap({
 
       {!KEY && !error && (
         <div className="absolute bottom-10 left-1/2 -translate-x-1/2 z-10 pointer-events-none whitespace-nowrap">
-          <div className="bg-black/70 backdrop-blur-sm text-vygo-secondary text-[10px] px-3 py-1.5 rounded-full border border-vygo-border">
+          <div className="bg-white/80 backdrop-blur-sm text-vygo-secondary text-[10px] px-3 py-1.5 rounded-full border border-vygo-border">
             Agrega <code className="text-vygo-warning">VITE_MAPTILER_KEY</code> para mapa vectorial
           </div>
         </div>

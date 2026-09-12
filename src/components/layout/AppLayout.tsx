@@ -19,7 +19,7 @@ export function AppLayout() {
   const driverStatus = useDriverStore((s) => s.status)
 
   return (
-    <div className="flex justify-center w-full h-full bg-black">
+    <div className="flex justify-center w-full h-full bg-vygo-bg">
       <div className="relative w-full max-w-[430px] h-full flex flex-col overflow-hidden bg-vygo-bg">
 
         {isRouteScreen ? (
