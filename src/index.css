@@ -2,25 +2,25 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Override MapLibre default styles to match dark theme */
+/* Override MapLibre default styles to match light theme */
 .maplibregl-ctrl-attrib {
-  background: rgba(14,17,69,0.8) !important;
-  color: #7880C8 !important;
+  background: rgba(250,251,255,0.9) !important;
+  color: #4A5490 !important;
   font-size: 10px !important;
 }
-.maplibregl-ctrl-attrib a { color: #7880C8 !important; }
+.maplibregl-ctrl-attrib a { color: #4A5490 !important; }
 .maplibregl-ctrl-group {
-  background: #181C6A !important;
-  border: 1px solid #2A3088 !important;
+  background: #F0F2FF !important;
+  border: 1px solid #C5CAF0 !important;
   border-radius: 12px !important;
   overflow: hidden;
 }
 .maplibregl-ctrl-group button {
   background: transparent !important;
-  color: #7880C8 !important;
+  color: #4A5490 !important;
 }
-.maplibregl-ctrl-group button:hover { background: #21267C !important; }
-.maplibregl-ctrl-group button span { filter: invert(0.6); }
+.maplibregl-ctrl-group button:hover { background: #E5E8FF !important; }
+.maplibregl-ctrl-group button span { filter: invert(0) brightness(0.4); }
 
 @layer base {
   *, *::before, *::after {
@@ -28,8 +28,8 @@
   }
 
   html {
-    background-color: #0E1145;
-    color: #EEEEFF;
+    background-color: #FAFBFF;
+    color: #0F1340;
     font-family: 'Inter', system-ui, sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
@@ -42,7 +42,7 @@
     padding: 0;
     height: 100%;
     overflow: hidden;
-    background-color: #0E1145;
+    background-color: #FAFBFF;
   }
 
   #root {
@@ -90,7 +90,7 @@
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #2A3088;
+  background: #C5CAF0;
   border-radius: 2px;
 }
 
