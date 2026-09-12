@@ -1,0 +1,11 @@
+# Evento de media jornada: CIERRE_VIAL (vygo/eventos.py). Bloquea un corredor del grid
+# (una fila o columna completa) durante una ventana fija del turno; cualquier viaje que
+# necesite cruzarlo paga `factor_detour` de más en tiempo y distancia (ruta alterna
+# aproximada, ver geo.Corredor). `indice` en celdas de grid (GridWorld default n=20).
+eventos:
+  - tipo: cierre_vial
+    inicia_min: 60
+    duracion_min: 40
+    eje: columna
+    indice: 10
+    factor_detour: 1.7

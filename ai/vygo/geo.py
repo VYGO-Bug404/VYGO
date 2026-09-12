@@ -14,10 +14,35 @@ viaje de esta rejilla (demostración en el docstring de `travel`).
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 import numpy as np
 
 from vygo.schema import CLIMA_SIMULABLE, Clima, Vehiculo, VEHICULOS
 from vygo.weather import ParametrosClima
+
+
+@dataclass(frozen=True, slots=True)
+class Corredor:
+    """Un corredor del grid bloqueado temporalmente (evento CIERRE_VIAL, ver eventos.py).
+
+    `eje='fila'`: bloquea cruzar esa fila (separa arriba/abajo, boundary en `indice`:
+    cruza si un extremo tiene fila < indice y el otro fila >= indice). `eje='columna'`:
+    igual mismo pero para columnas. `factor_detour` multiplica tiempo Y distancia de
+    cualquier viaje que necesite cruzarlo -- modela la ruta alterna (dar la vuelta) sin
+    pathfinding real sobre un grafo, que sería mucho más caro y no cambia la conclusión
+    cualitativa: cruzar cuesta más caro mientras el corredor esté cerrado."""
+
+    eje: str  # "fila" | "columna"
+    indice: int
+    factor_detour: float = 1.7
+
+
+def _cruza_corredor(origen: tuple[int, int], destino: tuple[int, int], corredor: Corredor) -> bool:
+    k = 0 if corredor.eje == "fila" else 1
+    a, b = origen[k], destino[k]
+    lo, hi = (a, b) if a <= b else (b, a)
+    return lo < corredor.indice <= hi
 
 SEGUNDOS_DIA = 86400.0
 
@@ -98,6 +123,7 @@ class GridWorld:
 
     def travel(
         self, origen: tuple[int, int], destino: tuple[int, int], t: float, clima: Clima,
+        corredores_cerrados: tuple[Corredor, ...] = (),
     ) -> tuple[float, float]:
         """(segundos, metros) para ir de `origen` a `destino` saliendo en el instante `t`.
 
@@ -108,12 +134,24 @@ class GridWorld:
         menor que 1/(tiempo_base_maximo*mult_zona_max*mult_clima_max), ningún adelanto de
         salida puede "adelantar" la llegada. El perfil default deja margen amplio (~3x) para
         esta rejilla; un `perfil_hora` custom con picos más agresivos podría romperlo.
-        """
+
+        `corredores_cerrados`: ver `Corredor` (eventos.py CIERRE_VIAL). NO es Lipschitz en
+        el tiempo -- un corredor abre/cierra como escalón, así que FIFO puede romperse en el
+        instante exacto del cambio para los pocos viajes que cruzan justo ese corredor. Es
+        una degradación aceptada y documentada del evento (dura pocos minutos, es la
+        excepción guionada, no la operación normal); el resto del grid sigue siendo FIFO
+        exacto todo el tiempo. Default `()`: comportamiento IDÉNTICO al de antes de que
+        existiera este parámetro."""
+
         i, j = self._indice(origen), self._indice(destino)
         distancia_m = float(self.dist_m[i, j])
         mult_zona = 0.5 * (float(self.mult_zona.flat[i]) + float(self.mult_zona.flat[j]))
         mult = mult_zona * self._mult_hora_en(t) * CLIMA_MULT[clima]
         tiempo_s = float(self.tiempo_base_s[i, j]) * mult
+        for corredor in corredores_cerrados:
+            if _cruza_corredor(origen, destino, corredor):
+                tiempo_s *= corredor.factor_detour
+                distancia_m *= corredor.factor_detour
         return tiempo_s, distancia_m
 
     def densidad_local(self, celda: tuple[int, int]) -> float:

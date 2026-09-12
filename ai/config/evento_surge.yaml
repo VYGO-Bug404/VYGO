@@ -1,0 +1,12 @@
+# Evento de media jornada: SURGE (vygo/eventos.py). Sube tarifa e intensidad de demanda en
+# una zona durante una ventana fija del turno. `zona`/`radio_celdas` en celdas de grid
+# (GridWorld default: n=20, cell_size_m=500 -> 10x10 km); `inicia_min` cuenta desde el
+# inicio del turno simulado, no la hora del día.
+eventos:
+  - tipo: surge
+    inicia_min: 60
+    duracion_min: 45
+    zona: [10, 10]
+    radio_celdas: 4
+    mult_tarifa: 1.4
+    mult_intensidad: 1.6

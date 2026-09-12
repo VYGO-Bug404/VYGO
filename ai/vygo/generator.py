@@ -207,11 +207,22 @@ class GeneradorPedidos:
             return 1.0, 1.0
         return self.modificador(t, zona)
 
+    def _intensidad_efectiva(self, t: float, comercio: Comercio) -> float:
+        """Intensidad base del comercio, escalada por el multiplicador de DEMANDA del
+        modificador de evento activo en su zona (§ SURGE, eventos.py) -- antes de la tarea
+        "evento de media jornada" este multiplicador se calculaba pero nunca se aplicaba
+        aquí (bug real: sólo se usaba mult_tarifa en `_tarifa`, mult_demanda quedaba
+        calculado y descartado). Usado tanto para la tasa total (`_lambda_total`) como para
+        el peso de selección de comercio (`_crear_pedido`) -- deben ser la MISMA intensidad
+        efectiva o un surge subiría la tasa global sin concentrar los pedidos en su zona."""
+        _mult_tarifa, mult_demanda = self._modificador_en(t, comercio.pos)
+        return comercio.intensidad * mult_demanda
+
     def _lambda_total(self, t: float) -> float:
         clima_actual = self._clima_actual(t)
         mult_clima = self.clima.mult_demanda(clima_actual)
         mult_hora = _perfil_llegada_hora(t)
-        intensidad_total = sum(c.intensidad for c in self.comercios)
+        intensidad_total = sum(self._intensidad_efectiva(t, c) for c in self.comercios)
         # Subido de 1/90s a 1/30s (3x): con 1/90s la prueba de sanidad (ver
         # reports/HANDOFF.md) daba bundling~0.97 y B2 apenas +9.3% sobre B1 -- muy poca
         # concurrencia de pedidos visibles a la vez como para que agrupar valga la pena.
@@ -236,7 +247,7 @@ class GeneradorPedidos:
         return max(muestras) * 1.5 + 1e-6
 
     def _crear_pedido(self, t: float) -> PedidoGenerado:
-        pesos = np.array([c.intensidad for c in self.comercios])
+        pesos = np.array([self._intensidad_efectiva(t, c) for c in self.comercios])
         comercio = self.comercios[int(self.rng.choice(len(self.comercios), p=pesos / pesos.sum()))]
         destino = self._muestrear_destino(comercio.pos)
         clima_actual = self._clima_actual(t)

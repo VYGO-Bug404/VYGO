@@ -37,6 +37,7 @@ from vygo.feasibility import (
     action_mask,
     holguras_frescura_plan,
 )
+from vygo.eventos import ProgramadorEventos
 from vygo.features import K_A, ConstructorFeatures
 from vygo.generator import DURACION_RONDA_S, EXPIRA_OFERTA_S, GeneradorPedidos, MAX_RONDAS, PedidoGenerado
 from vygo.geo import GridWorld
@@ -67,6 +68,7 @@ class VygoEnv(gymnasium.Env):
     def __init__(
         self, nivel: str = "L1", m_comercios: int = 200, vehiculo: Vehiculo = Vehiculo.MOTO,
         duracion_turno_s: float = DURACION_TURNO_S,
+        programador_eventos: Optional[ProgramadorEventos] = None,
     ) -> None:
         if nivel not in ("L0", "L1"):
             raise ValueError("nivel debe ser 'L0' o 'L1'")
@@ -74,6 +76,12 @@ class VygoEnv(gymnasium.Env):
         self.m_comercios = m_comercios
         self.vehiculo = vehiculo
         self.duracion_turno_s = duracion_turno_s
+        # Opcional, default None: SIN eventos el comportamiento es IDÉNTICO al de antes de
+        # la tarea "evento de media jornada" (ver eventos.py). `_eventos` (sin el
+        # `_programador_`) ya es el nombre de la cola heapq de eventos del simulador
+        # (pedido/cierra_ronda/expira_oferta/llega_nodo) -- nombre distinto a propósito
+        # para no chocar con eso.
+        self.programador_eventos = programador_eventos
         self.action_space = spaces.Discrete(K_F + 2)
         dim = ConstructorFeatures().buffer.shape[0]
         self.observation_space = spaces.Box(low=-100.0, high=100.0, shape=(dim,), dtype=np.float32)
@@ -89,6 +97,8 @@ class VygoEnv(gymnasium.Env):
         self.grid = GridWorld(n=20, seed=s, vehiculo=self.vehiculo)
         clima = CadenaClima.crear(seed=s)
         self.generador = GeneradorPedidos.crear(self.grid, m_comercios=self.m_comercios, seed=s, clima=clima, nivel=self.nivel)
+        if self.programador_eventos is not None:
+            self.generador.modificador = self.programador_eventos.modificador
 
         self.t = 0.0
         self.pos = (self.grid.n // 2, self.grid.n // 2)
@@ -179,11 +189,18 @@ class VygoEnv(gymnasium.Env):
         ids_por_recoger = {p.id for p in self.plan if p.tipo == "recogida"}
         return sum(1 for p in self.plan if p.tipo == "entrega" and p.id not in ids_por_recoger)
 
+    def _corredores_en(self, t: float) -> tuple:
+        if self.programador_eventos is None:
+            return ()
+        return self.programador_eventos.corredores_cerrados(t)
+
     def _travel_fn(self, a: tuple[int, int], b: tuple[int, int], t: float) -> tuple[float, float]:
         """`GridWorld.travel` pide clima explícito; sequencer.TravelFn es de 3 argumentos.
         Se cierra sobre el clima vigente (sólo cambia vía CadenaClima.avanzar, nunca en
-        medio de una secuencia de llamadas de held_karp/verificar_y_calendarizar)."""
-        return self.grid.travel(a, b, t, self.generador.clima.estado)
+        medio de una secuencia de llamadas de held_karp/verificar_y_calendarizar). Los
+        corredores cerrados SÍ dependen de `t` (evento CIERRE_VIAL con ventana propia, ver
+        eventos.py) -- se evalúan en cada llamada, no se cierran sobre un valor fijo."""
+        return self.grid.travel(a, b, t, self.generador.clima.estado, self._corredores_en(t))
 
     def _estado_ruta(self) -> EstadoRuta:
         ofertas: list[Optional[OfertaCandidata]] = []
@@ -253,7 +270,7 @@ class VygoEnv(gymnasium.Env):
                         mejor_densidad, mejor = d, (f, c)
         if mejor == self.pos:
             return 0.0
-        dt, dm = self.grid.travel(self.pos, mejor, self.t, self.generador.clima.estado)
+        dt, dm = self.grid.travel(self.pos, mejor, self.t, self.generador.clima.estado, self._corredores_en(self.t))
         self.t += dt
         self.pos = mejor
         self.km_acum += dm / 1000.0
@@ -659,6 +676,26 @@ class VygoEnv(gymnasium.Env):
             if len(plan_items) >= K_A:
                 break
 
+        if self.programador_eventos is not None and len(plan_items) < K_A:
+            # Estado del evento de media jornada (SURGE/CIERRE_VIAL, ver eventos.py) en un
+            # slot del bloque "plan activo" que ya está SIEMPRE en cero: K_A_MAXIMO=4 < K_A=6
+            # (feasibility.py), así que `plan_items` nunca llega a 5 pedidos reales y este
+            # slot queda libre sin tocar la dimensión de 186 ni el layout de features.py.
+            # Reutiliza las mismas 10 claves que un pedido real con otro significado.
+            estado_ev = self.programador_eventos.estado_en(self.t)
+            plan_items.append({
+                "delta_origen_x": estado_ev["surge_activo"],
+                "delta_origen_y": estado_ev["cierre_vial_activo"],
+                "delta_destino_x": estado_ev["minutos_restantes_norm"],
+                "delta_destino_y": estado_ev["mult_tarifa_norm"],
+                "tarifa_norm": estado_ev["mult_intensidad_norm"],
+                "holgura_frescura_norm": 0.0,
+                "holgura_fecha_limite_norm": 0.0,
+                "r_menos_t_norm": 0.0,
+                "recogido": 0.0,
+                "app_idx_norm": 0.0,
+            })
+
         ofertas_items: list[Optional[dict]] = []
         for i, pid in enumerate(self.slots):
             if pid is None:
@@ -669,8 +706,9 @@ class VygoEnv(gymnasium.Env):
                 (self.pos[0] - p.origen[0]) * self.grid.cell_size_m,
                 (self.pos[1] - p.origen[1]) * self.grid.cell_size_m,
             )
-            dt_dir, dd_dir = self.grid.travel(self.pos, p.origen, self.t, clima_actual)
-            _dt2, dd2 = self.grid.travel(p.origen, p.destino, self.t, clima_actual)
+            corredores = self._corredores_en(self.t)
+            dt_dir, dd_dir = self.grid.travel(self.pos, p.origen, self.t, clima_actual, corredores)
+            _dt2, dd2 = self.grid.travel(p.origen, p.destino, self.t, clima_actual, corredores)
             km_total = max((dd_dir + dd2) / 1000.0, 1e-6)
             anillo = self.generador.anillo_de(dist_m)
             p_gana = self.generador.p_gana_estimada(dist_m, self.generador.n_competidores_base)
