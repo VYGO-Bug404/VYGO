@@ -7,6 +7,7 @@ interface OrdersStore {
   completedOrders: Order[]
   pendingOffer: Order | null
   currentEarningsPerHour: number
+  _nextRouteNumber: number
 
   acceptOffer: (order: Order) => void
   rejectOffer: () => void
@@ -21,23 +22,24 @@ export const useOrdersStore = create<OrdersStore>((set, get) => ({
   completedOrders: ordersService.getCompletedOrders(),
   pendingOffer: null,
   currentEarningsPerHour: 192,
+  _nextRouteNumber: 4, // mocks already have 1, 2, 3
 
   setPendingOffer: (order) => set({ pendingOffer: order }),
 
   acceptOffer: (order) => {
-    const { activeOrders, completedOrders } = get()
-    const nextRouteNumber = activeOrders.length + completedOrders.length + 1
+    const { _nextRouteNumber } = get()
     const accepted: Order = {
       ...order,
       status: 'heading_to_pickup',
       acceptedAt: new Date(),
-      routeNumber: order.routeNumber ?? nextRouteNumber,
+      routeNumber: order.routeNumber ?? _nextRouteNumber,
     }
     const projected = order.projectedEarningsPerHour ?? get().currentEarningsPerHour
     set((state) => ({
       activeOrders: [...state.activeOrders, accepted],
       pendingOffer: null,
       currentEarningsPerHour: projected,
+      _nextRouteNumber: state._nextRouteNumber + 1,
     }))
   },
 
