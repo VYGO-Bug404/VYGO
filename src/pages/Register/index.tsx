@@ -39,8 +39,9 @@ export function RegisterPage() {
     try {
       await register(form.name, form.email, form.password)
       navigate('/', { replace: true })
-    } catch {
-      setErrors({ general: 'No se pudo crear la cuenta. Intenta de nuevo.' })
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : ''
+      setErrors({ general: msg.includes('already registered') ? 'Este correo ya está registrado' : (msg || 'No se pudo crear la cuenta. Intenta de nuevo.') })
     } finally {
       setLoading(false)
     }

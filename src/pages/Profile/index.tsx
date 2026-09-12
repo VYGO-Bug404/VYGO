@@ -22,9 +22,9 @@ export function ProfilePage() {
   const status = useDriverStore((s) => s.status)
   const logout = useAuthStore((s) => s.logout)
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     endShift()
-    logout()
+    await logout()
     navigate('/login', { replace: true })
   }
 

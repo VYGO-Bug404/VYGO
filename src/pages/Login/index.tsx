@@ -32,8 +32,9 @@ export function LoginPage() {
     try {
       await login(email, password)
       navigate('/', { replace: true })
-    } catch {
-      setErrors({ general: 'Correo o contraseña incorrectos' })
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : ''
+      setErrors({ general: msg.includes('Invalid login') ? 'Correo o contraseña incorrectos' : (msg || 'Error al iniciar sesión') })
     } finally {
       setLoading(false)
     }
