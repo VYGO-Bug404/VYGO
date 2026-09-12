@@ -24,6 +24,21 @@ interface MockMapProps {
 }
 
 const MONTERREY: [number, number] = [-100.3161, 25.6866]
+const LOCATION_KEY = 'vygo-last-position'
+
+function getSavedPosition(): [number, number] {
+  try {
+    const raw = localStorage.getItem(LOCATION_KEY)
+    if (!raw) return MONTERREY
+    const { lng, lat } = JSON.parse(raw)
+    if (typeof lat === 'number' && typeof lng === 'number') return [lng, lat]
+  } catch {}
+  return MONTERREY
+}
+
+function savePosition(lng: number, lat: number) {
+  try { localStorage.setItem(LOCATION_KEY, JSON.stringify({ lng, lat })) } catch {}
+}
 
 const PLATFORM_COLORS: Record<string, string> = {
   uber: '#FFFFFF',
@@ -91,8 +106,8 @@ export function MockMap({
         map = new MLMap({
           container: wrap,
           style: buildStyle(),
-          center: MONTERREY,
-          zoom: 13,
+          center: getSavedPosition(),
+          zoom: 15,
           attributionControl: false,
         })
 
@@ -239,13 +254,15 @@ export function MockMap({
     `
 
     const marker = new Marker({ element: el, anchor: 'center' })
-      .setLngLat(MONTERREY)
+      .setLngLat(getSavedPosition())
       .addTo(map)
     driverRef.current = marker
 
     const applyPosition = (pos: GeolocationPosition) => {
-      const lngLat: [number, number] = [pos.coords.longitude, pos.coords.latitude]
+      const { longitude: lng, latitude: lat } = pos.coords
+      const lngLat: [number, number] = [lng, lat]
       marker.setLngLat(lngLat)
+      savePosition(lng, lat)
       if (followDriverRef.current && mapRef.current) {
         mapRef.current.easeTo({ center: lngLat, duration: 600, essential: true })
       }
