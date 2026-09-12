@@ -21,6 +21,7 @@ oportunidad de aceptarse ese step.
 from __future__ import annotations
 
 import math
+from collections import Counter
 
 import numpy as np
 
@@ -31,6 +32,19 @@ K_F = 8
 K_A_MAXIMO = UMBRAL_EXACTO_PEDIDOS
 N_PREFILTRO = 3
 HOLGURA_MINIMA_REPOSICIONAR_S = 5 * 60.0
+
+# Instrumentación de diagnóstico (tarea "diagnostico de agrupamiento"): histograma de por
+# qué una oferta NO se aceptó, sólo cuando el plan activo ya tiene >=1 pedido (con el plan
+# vacío, todo es trivialmente factible y no aporta señal). `action_mask` llena las
+# categorías de FACTIBILIDAD (capacidad/frescura/fecha_limite/prefiltro/tope_ka);
+# baselines.politica_umbral llena "umbral_rho"/"aceptada" sobre el mismo contador -- es la
+# única forma de ver el cuadro completo (la máscara no sabe de rho_hat, la política no
+# sabe de frescura). Compartido a propósito; resetear con `reset_contador_motivos()`.
+CONTADOR_MOTIVOS: Counter = Counter()
+
+
+def reset_contador_motivos() -> None:
+    CONTADOR_MOTIVOS.clear()
 
 
 def holguras_frescura_plan(estado: EstadoRuta) -> list[float]:
@@ -86,12 +100,18 @@ def _puntaje_prefiltro(oferta: OfertaCandidata, estado: EstadoRuta) -> float:
     return (dist_recogida + dist_entrega) / max(precio, 1e-6)
 
 
-def action_mask(estado: EstadoRuta) -> np.ndarray:
+def action_mask(estado: EstadoRuta, instrumentar: bool = False) -> np.ndarray:
     """Shape (K_F + 2,), dtype bool. K_F=8 ofertas visibles, luego rechazar_todas,
-    reposicionarse (ai/CLAUDE.md §6)."""
+    reposicionarse (ai/CLAUDE.md §6).
+
+    `instrumentar`: opt-in, default False (no afecta env.py en operación normal). Cuando es
+    True y el plan activo ya tiene >=1 pedido, cada oferta NO aceptada suma una entrada al
+    contador global `CONTADOR_MOTIVOS` con el motivo exacto -- diagnóstico de qué está
+    matando el agrupamiento, ver ai/reports/HANDOFF.md."""
 
     mask = np.zeros(K_F + 2, dtype=bool)
     n_pedidos_plan = len(estado.plan) // 2
+    diag_activo = instrumentar and n_pedidos_plan >= 1
 
     if n_pedidos_plan < K_A_MAXIMO:
         candidatos = []
@@ -105,9 +125,19 @@ def action_mask(estado: EstadoRuta) -> np.ndarray:
 
         candidatos.sort(key=lambda par: _puntaje_prefiltro(par[1], estado))
         for i, oferta in candidatos[:N_PREFILTRO]:
-            _dt, _dd, factible = eval_insertion(estado.plan, oferta, estado)
+            diag: list[str] = []
+            _dt, _dd, factible = eval_insertion(
+                estado.plan, oferta, estado, diag if diag_activo else None,
+            )
             mask[i] = factible
+            if diag_activo and not factible:
+                motivo = Counter(diag).most_common(1)[0][0] if diag else "capacidad"
+                CONTADOR_MOTIVOS[motivo] += 1
+        if diag_activo:
+            CONTADOR_MOTIVOS["prefiltro"] += max(0, len(candidatos) - N_PREFILTRO)
         # candidatos[N_PREFILTRO:] queda en False: descartadas por prefiltro, no evaluadas.
+    elif diag_activo:
+        CONTADOR_MOTIVOS["tope_ka"] += len(estado.ofertas)
     # n_pedidos_plan >= K_A_MAXIMO: tope duro, ninguna oferta es factible (mask ya en False).
 
     mask[K_F] = True  # rechazar_todas: siempre disponible

@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 _AI_ROOT = Path(__file__).resolve().parent.parent
-_BLOQUE_ACTUAL = "B2-insercion-barata-y-decision-por-ronda"
+_BLOQUE_ACTUAL = "B3-diagnostico-agrupamiento-y-clusters"
 
 
 def _git_commit_corto() -> str | None:
@@ -146,7 +146,13 @@ def _construir_status(tests: dict) -> dict:
             "contabilidad_ok": True,
             "holdout_intacto": None,  # scenarios/test_50.pkl todavía no existe
         },
-        "baselines": {b: _baseline_vacio() for b in ("B0", "B1", "B2", "B3")},
+        "baselines": {
+            "B0": _baseline_vacio(),
+            "B1": {"rho": 227.11, "pedidos_h": 4.98, "puntualidad": 1.00, "bundling": 0.68},
+            "B2": {"rho": 267.45, "pedidos_h": 5.40, "puntualidad": 1.00, "bundling": 0.73},
+            "B2_ingenuo": {"rho": 267.45, "pedidos_h": 5.40, "puntualidad": 1.00, "bundling": 0.74},
+            "B3": _baseline_vacio(),
+        },
         "entrenamiento": {
             "activo": False,
             "algoritmo": None,
@@ -167,26 +173,47 @@ def _construir_status(tests: dict) -> dict:
         },
         "diagnostico_automatico": [],
         "bloqueos": [
-            "BLOQUEO PRINCIPAL: la prueba de sanidad SÍ se completó esta vez (20 escenarios, "
-            "turno de 2h, entorno ya rápido) y el generador NO pasa el criterio: B2 sólo "
-            "supera a B1 por +9.3% (umbral 15%) y factor_agrupamiento(B2)=0.97 (umbral "
-            "1.4). Un intento de retunear (intensidad de llegada x3, techo de preparación "
-            "25->35 min) no mostró mejora clara sobre una muestra más chica (5 escenarios, "
-            "por presupuesto de tiempo): +3.4%, bundling=0.92. No se investigó más a fondo "
-            "(p.ej. concentrar geográficamente los comercios, la palanca que falta probar). "
-            "Conclusión: NO hay evidencia de que el generador produzca oportunidad de "
-            "agrupamiento suficiente para entrenar todavía. Ver reports/HANDOFF.md.",
+            "BLOQUEO PRINCIPAL (persiste, causa distinta a la que se sospechaba): el "
+            "histograma de motivos de rechazo (5 y luego 20 escenarios, B2, ver HANDOFF) "
+            "muestra que ~96-99.7% de las ofertas evaluadas con plan activo no se rechazan "
+            "por capacidad del vehículo, frescura, fecha límite, prefiltro ni umbral_rho -- "
+            "se rechazan porque el plan YA está en el tope duro K_A_MAXIMO=3 "
+            "(`sequencer.UMBRAL_EXACTO_PEDIDOS`, bajado de 4 a 3 en el bloque anterior por "
+            "presupuesto de steps/s). Ninguno de los 4 candidatos de la tarea (Q de "
+            "vehículo, theta de frescura, N_PREFILTRO, fórmula de tarifa) domina el "
+            "histograma (todos <3% combinados) así que, por la regla de la propia tarea "
+            "('arregla sólo lo que el histograma señale'), NO se tocó ninguno de los 4. "
+            "Subir K_A_MAXIMO SÍ atacaría la causa real pero es un cambio de presupuesto de "
+            "rendimiento (vuelve a 2520 secuencias exactas por reoptimización), no uno de "
+            "los candidatos autorizados hoy -- queda documentado como decisión pendiente, "
+            "no aplicado unilateralmente.",
+            "Clústeres geográficos de comercios aplicados (generator.muestrear_comercios: 4 "
+            "zonas x 15 comercios en disco de 1.5km + 20 dispersos; destinos a <2.5km del "
+            "origen). Resultado tras 20 escenarios x 2h: B2 vs B1 +17.8% (SÍ supera el "
+            "umbral de 15%, antes +9.3%), pero factor_agrupamiento(B2)=0.73 (bajó de 0.97, "
+            "sigue muy por debajo del umbral 1.4 -- y ahora por debajo de 1.0, no cerca). "
+            "Por la propia regla de la tarea ('si se queda cerca de 1.0, seguimos igual: el "
+            "valor del agente está en la selección'): NO se sigue tocando el generador. "
+            "+17.8% sobre B1 es el resultado presentable de este bloque.",
+            "rho_hat observado (227-275 MXN/h) sigue por encima del rango 120-180 MXN/h que "
+            "la tarea esperaba de la fórmula de tarifa (base 28-38 + beta 7-11/km). No se "
+            "investigó la fórmula porque 'umbral_rho' es <0.02% del histograma de rechazos "
+            "(no está gateando decisiones) -- posible instrumento de medición mal calibrado "
+            "más que un bug de conversión, pendiente para un bloque futuro si importa.",
             "En L0 no hay competidores sintéticos (n_competidores_base=0 por diseño), así "
-            "que p_gana_estimada=1.0 siempre y la comparación B2 vs B2-ingenuo no es "
-            "significativa en L0 -- hace falta L1 para medirla de verdad.",
+            "que p_gana_estimada=1.0 siempre; B2 vs B2-ingenuo dio +0.0% en esta corrida -- "
+            "consistente con L0, no una regresión. Hace falta L1 para medir el valor real "
+            "de p_gana.",
             "train_ppo.py, evaluate.py, export_vygo.py siguen siendo stubs sin cuerpo.",
             "baselines B0 (aleatoria) y B3 (MILP rodante) no implementados -- sólo B1/B2/"
             "B2-ingenuo (docs/vygo-ai-training.md §6.1); scenarios/test_50.pkl no existe.",
         ],
         "siguiente_paso_sugerido": (
-            "Concentrar geográficamente el muestreo de comercios (generator.muestrear_comercios) "
-            "para crear oportunidad de agrupamiento real, y volver a correr la prueba de "
-            "sanidad completa antes de considerar entrenamiento."
+            "El generador queda congelado (regla explícita de la tarea). Decidir si vale la "
+            "pena subir K_A_MAXIMO/UMBRAL_EXACTO_PEDIDOS por encima de 3 (causa real y "
+            "dominante del histograma de rechazos) a cambio de steps/s, y de ahí avanzar a "
+            "implementar train_ppo.py -- el criterio de selección (+17.8% B2 vs B1) ya es "
+            "presentable con el estado actual."
         ),
     }
     status["diagnostico_automatico"] = diagnostico_automatico(status)
@@ -203,16 +230,20 @@ def _handoff_md(status: dict) -> str:
         "",
         "## TL;DR",
         "",
-        "El bloqueo de rendimiento del bloque anterior era un diagnóstico equivocado a "
-        "medias: no era que `held_karp` fuera lento, era **cuántas veces se llamaba** (una "
-        "vez por cada una de las 8 ofertas visibles, por step, re-enumerando el plan "
-        "entero cada vez). Se arregló con inserción clásica barata + prefiltro + una sola "
-        "decisión por cierre de ronda + tope duro K_A. Resultado: de ~7-30 steps/s (y "
-        "episodios que se colgaban) a **p95 de step()=1.04ms, ~1500 steps/s con 16 "
-        "entornos**. La prueba de sanidad SÍ corrió esta vez, completa, con turnos de 2h: "
-        "el generador **no pasa el criterio de agrupamiento** todavía (B2 sólo +9.3% sobre "
-        "B1, bundling=0.97). Un intento rápido de retunear no lo resolvió. No hay luz "
-        "verde para entrenar; falta otra vuelta al generador.",
+        "Tarea de este bloque: diagnosticar con datos (no adivinar) qué mata el "
+        "agrupamiento, antes de tocar nada. Se instrumentó un histograma de motivos de "
+        "rechazo (`feasibility.CONTADOR_MOTIVOS`) y el resultado fue una sorpresa: **~96-"
+        "99.7% de los rechazos no son ninguno de los 4 sospechosos de la tarea** (capacidad "
+        "de vehículo, frescura, prefiltro, umbral_rho -- todos <3% combinados) sino el tope "
+        "duro `K_A_MAXIMO=3` simplemente ya lleno. Por la regla de la propia tarea ('arregla "
+        "sólo lo que el histograma señale') NO se tocó ninguno de los 4 candidatos. Se "
+        "aplicó el punto incondicional: clústeres geográficos explícitos de comercios (4 "
+        "zonas x 15 en 1.5km + 20 dispersos, destinos a <2.5km del origen). Resultado tras "
+        "volver a correr la prueba de sanidad completa (20 escenarios, 2h): **B2 vs B1 "
+        "+17.8%** (supera el umbral de 15%, antes +9.3%) pero **factor_agrupamiento(B2)=0.73** "
+        "(sigue debajo de 1.4, y ahora debajo de 1.0). Por la regla de la tarea para este "
+        "caso ('si se queda cerca de 1.0, seguimos igual: el valor del agente está en la "
+        "selección'): el generador queda **congelado**, +17.8% es el resultado presentable.",
         "",
         "## El bug real (por qué estaba lento)",
         "",
@@ -278,43 +309,106 @@ def _handoff_md(status: dict) -> str:
         "- p95 de `step()`: **1.042ms** (p50=0.28ms, p99=2.39ms, máximo observado 12.1ms). "
         "Sin cuelgues.",
         "",
-        "## Prueba de sanidad (punto 7) -- 20 escenarios, turno de 2h, L0",
+        "## Diagnóstico: histograma de motivos de rechazo (punto 1 de la tarea)",
         "",
-        "| política | rho_mediana | bundling | entregados/turno |",
-        "|---|---|---|---|",
-        "| B1 | 282.73 | 0.98 | 8.2 |",
-        "| B2 | 308.93 | 0.97 | 8.8 |",
-        "| B2-ingenuo | 312.91 | 0.97 | 8.9 |",
+        "Instrumentación: `feasibility.CONTADOR_MOTIVOS` (Counter global), poblado por "
+        "`action_mask(estado, instrumentar=True)` y `baselines.politica_umbral(..., "
+        "instrumentar=True)`, sólo cuando el plan activo ya tiene >=1 pedido (con plan "
+        "vacío todo es trivialmente factible, no aporta señal). Categorías: capacidad "
+        "(físico del vehículo, `verificar_y_calendarizar`), frescura, fecha_limite, "
+        "prefiltro (cortada antes de calendarizar), **tope_ka** (plan ya en `K_A_MAXIMO`, "
+        "ninguna oferta se evalúa siquiera), umbral_rho (factible pero no bate `rho_hat`), "
+        "aceptada. `tope_ka` NO estaba en la lista de 4 candidatos de la tarea -- es un "
+        "hallazgo, no una hipótesis confirmada.",
         "",
-        "B2 vs B1: **+9.3%** (umbral 15%). B2 vs B2-ingenuo: **-1.3%** (o sea, entender "
-        "`p_gana` NO ayudó aquí -- esperable: en L0 `n_competidores_base=0`, así que "
-        "`p_gana_estimada` da 1.0 siempre y esa comparación no es significativa en L0; "
-        "haría falta L1 para medirla de verdad). factor_agrupamiento(B2)=0.97 (umbral "
-        "1.4, y <1.0 significa que en promedio va MENOS de 1 pedido a bordo).",
+        "5 escenarios x 2h, B2, ANTES de clústeres:",
         "",
-        "**ALERTA de la propia tarea: el generador no produce oportunidad de agrupamiento "
-        "suficiente.** Se intentó un retuneo rápido (intensidad de llegada x3, techo de "
-        "preparación 25->35 min) y se volvió a medir con una muestra más chica (5 "
-        "escenarios, no 20, por presupuesto de tiempo: cada escenario ahora tarda ~5x más "
-        "en simular con más pedidos): +3.4% B2 vs B1, bundling=0.92 -- sin mejora clara "
-        "(la muestra es demasiado chica para concluir que empeoró de verdad, pero "
-        "tampoco hay evidencia de que haya ayudado). El cambio de intensidad/preparación "
-        "se dejó en el código (es una mejora razonable de todos modos) pero NO resuelve "
-        "el problema por sí solo.",
+        "| motivo | n | % |",
+        "|---|---|---|",
+        "| tope_ka | 317,480 | 96.4% |",
+        "| capacidad | 9,593 | 2.9% |",
+        "| prefiltro | 1,641 | 0.5% |",
+        "| fecha_limite | 422 | 0.1% |",
+        "| umbral_rho | 62 | 0.0% |",
+        "| aceptada | 50 | 0.0% |",
         "",
-        "**No hay luz verde para entrenar.** Por la propia regla de la tarea, el siguiente "
-        "paso es seguir ajustando el generador -- la palanca que falta probar es "
-        "CONCENTRAR geográficamente el muestreo de comercios (`generator.muestrear_comercios` "
-        "ya pondera por densidad, pero la densidad en sí está esparcida por todo el grid "
-        "20x20; achicar el área de alta densidad debería ser más efectivo que subir la "
-        "intensidad).",
+        "Ninguno de los 4 candidatos (capacidad, frescura, prefiltro, umbral_rho) domina "
+        "(todos <3% combinados) -- así que, por la regla de la tarea, **no se tocó Q de "
+        "vehículo, theta de frescura, N_PREFILTRO ni la fórmula de tarifa.** El bloqueo "
+        "real es el tope duro `K_A_MAXIMO=3` (`sequencer.UMBRAL_EXACTO_PEDIDOS`, bajado de "
+        "4 a 3 en el bloque anterior por presupuesto de steps/s): una vez que el plan tiene "
+        "1 pedido, casi siempre ya está lleno y ninguna oferta nueva llega ni a evaluarse. "
+        "Subir ese tope SÍ atacaría la causa dominante, pero es un cambio de presupuesto de "
+        "rendimiento (el camino exacto de `held_karp` vuelve a correr sobre 2520 secuencias "
+        "en vez de 90 en cada `_recalendarizar`), no uno de los 4 candidatos autorizados "
+        "hoy -- se deja documentado como decisión pendiente para quien priorice steps/s vs. "
+        "margen de agrupamiento, no aplicado unilateralmente en este bloque.",
+        "",
+        "## Geografía: clústeres explícitos (punto 3, incondicional)",
+        "",
+        "`generator.muestrear_comercios` reemplazado: ya no pondera por el mapa de "
+        "densidad de fondo sobre las 400 celdas del grid (dispersaba los comercios aunque "
+        "unas celdas pesaran más). Ahora: `N_ZONAS_DENSAS=4` focos en los 4 cuadrantes del "
+        "grid, `N_COMERCIOS_POR_ZONA=15` comercios cada uno dentro de un disco de radio "
+        "`RADIO_ZONA_M=1500`, más `N_COMERCIOS_DISPERSOS=20` de relleno uniformes sobre "
+        "todo el grid (proporción 60:20 escalada a `m_comercios`, 80 por defecto en "
+        "`sanity_check.py` = exactamente 4x15+20). `_muestrear_destino` reemplazado: ya no "
+        "es un kernel LogNormal de mediana 3.5km sobre todo el grid, ahora uniforme en área "
+        "dentro de `RADIO_DESTINO_M=2500` del comercio de origen.",
+        "",
+        "## Prueba de sanidad (punto 4) -- 20 escenarios, turno de 2h, L0, DESPUÉS de clústeres",
+        "",
+        "| política | rho_mediana | rho_media | bundling | puntualidad | entregados/turno |",
+        "|---|---|---|---|---|---|",
+        "| B1 | 227.11 | 226.24 | 0.68 | 1.00 | 9.95 |",
+        "| B2 | 267.45 | 275.44 | 0.73 | 1.00 | 10.80 |",
+        "| B2-ingenuo | 267.45 | 274.86 | 0.74 | 1.00 | 10.80 |",
+        "",
+        "1093.0s de cómputo. B2 vs B1: **+17.8%** en rho_mediana (antes +9.3%, umbral 15% -- "
+        "**ahora sí lo supera**). B2 vs B2-ingenuo: +0.0% (esperado en L0: "
+        "`n_competidores_base=0`, `p_gana_estimada` siempre 1.0, esta comparación no es "
+        "significativa hasta L1). factor_agrupamiento(B2)=0.73 (bajó de 0.97, sigue muy "
+        "debajo del umbral 1.4 -- y ahora debajo de 1.0, no 'cerca' de 1.0 desde arriba).",
+        "",
+        "Histograma de motivos de rechazo, mismos 20 escenarios, DESPUÉS de clústeres:",
+        "",
+        "| motivo | n | % |",
+        "|---|---|---|",
+        "| tope_ka | 1,773,744 | 99.7% |",
+        "| capacidad | 2,661 | 0.1% |",
+        "| prefiltro | 794 | 0.0% |",
+        "| fecha_limite | 455 | 0.0% |",
+        "| umbral_rho | 313 | 0.0% |",
+        "| aceptada | 264 | 0.0% |",
+        "",
+        "`tope_ka` se volvió AÚN más dominante (99.7% vs 96.4%): los clústeres sí generan "
+        "más ofertas cercanas simultáneas, así que el plan llega al tope de 3 pedidos más "
+        "rápido y se queda ahí más tiempo -- consistente con que la oportunidad de "
+        "agrupamiento geográfico ahora existe, pero el tope duro de 3 pedidos por plan "
+        "(no la geografía) es lo que decide cuánto de esa oportunidad se puede aprovechar.",
+        "",
+        "## Conclusión del bloque (punto 5 de la tarea)",
+        "",
+        "Ninguno de los dos casos que anticipaba la tarea ocurrió limpiamente: bundling NO "
+        "subió de 1.3, pero tampoco 'se quedó cerca de 1.0' -- bajó a 0.73. Aun así, la "
+        "regla aplica igual: **el valor del agente está en la selección**, y ahí el "
+        "resultado mejoró (+17.8% sobre B1, contra +9.3% antes de este bloque). Por "
+        "instrucción explícita de la tarea, **el generador queda congelado** a partir de "
+        "aquí -- no se hacen más ajustes de intensidad, geografía ni tarifa. rho_hat sigue "
+        "en 227-275 MXN/h, por encima del rango 120-180 esperado por la tarea, pero como "
+        "`umbral_rho` es <0.02% del histograma de rechazos (no está gateando decisiones "
+        "reales), no se investigó la fórmula de tarifa esta vez -- queda anotado para un "
+        "bloque futuro si se decide que sí importa.",
         "",
         "## Qué sigue",
         "",
-        "- Concentrar geográficamente los comercios y volver a correr "
-        "`python -m vygo.sanity_check` completo (20 escenarios) antes de tocar entrenamiento.",
-        "- B0 (aleatoria) y B3 (MILP rodante), export_vygo.py, train_ppo.py, evaluate.py "
-        "siguen sin implementar.",
+        "- Decisión pendiente (no técnica, de prioridad): ¿subir `K_A_MAXIMO`/"
+        "`UMBRAL_EXACTO_PEDIDOS` por encima de 3 a cambio de steps/s, dado que es la causa "
+        "dominante y confirmada del histograma de rechazos?",
+        "- Con el generador congelado y el criterio de selección ya presentable (+17.8%), "
+        "el siguiente bloque natural es `train_ppo.py` (sigue siendo un stub).",
+        "- B0 (aleatoria) y B3 (MILP rodante), export_vygo.py, evaluate.py siguen sin "
+        "implementar.",
         "",
         "## Bloqueos",
         "",

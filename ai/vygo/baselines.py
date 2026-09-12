@@ -10,7 +10,7 @@ import math
 
 import numpy as np
 
-from vygo.feasibility import K_F, action_mask
+from vygo.feasibility import CONTADOR_MOTIVOS, K_F, action_mask
 from vygo.insertion import EstadoRuta, eval_insertion
 
 COSTO_KM_MXN = 1.2
@@ -68,17 +68,40 @@ def _tasa_marginal(estado: EstadoRuta, i: int, con_p_gana: bool) -> tuple[float,
     return tasa, True
 
 
-def politica_umbral(estado: EstadoRuta, rho_hat: float, con_p_gana: bool = True) -> int:
+def politica_umbral(
+    estado: EstadoRuta, rho_hat: float, con_p_gana: bool = True, instrumentar: bool = False,
+) -> int:
     """B2 (con_p_gana=True) / B2-ingenuo (con_p_gana=False): entre las ofertas factibles,
     maximiza p_gana_j * (precio_j - c_kappa*delta_dist_j) / delta_t_j y acepta esa oferta
-    si supera `rho_hat`; si ninguna supera el umbral, rechazar_todas."""
+    si supera `rho_hat`; si ninguna supera el umbral, rechazar_todas.
 
-    mask = action_mask(estado)
-    mejor_i, mejor_tasa = None, rho_hat
+    `instrumentar`: ver `feasibility.action_mask`. Aquí además se suman al mismo contador
+    global las categorías "umbral_rho" (factible pero su tasa marginal no superó `rho_hat`)
+    y "aceptada" (la oferta finalmente elegida), sólo cuando el plan activo ya tiene >=1
+    pedido -- la máscara sola no puede distinguir estas dos, sólo la política lo sabe."""
+
+    mask = action_mask(estado, instrumentar=instrumentar)
+    n_pedidos_plan = len(estado.plan) // 2
+    diag_activo = instrumentar and n_pedidos_plan >= 1
+
+    candidatas: list[tuple[int, float]] = []
     for i in range(K_F):
         if not mask[i]:
             continue
         tasa, ok = _tasa_marginal(estado, i, con_p_gana)
-        if ok and tasa > mejor_tasa:
+        if ok:
+            candidatas.append((i, tasa))
+
+    mejor_i, mejor_tasa = None, rho_hat
+    for i, tasa in candidatas:
+        if tasa > mejor_tasa:
             mejor_tasa, mejor_i = tasa, i
+
+    if diag_activo:
+        for i, _tasa in candidatas:
+            if i != mejor_i:
+                CONTADOR_MOTIVOS["umbral_rho"] += 1
+        if mejor_i is not None:
+            CONTADOR_MOTIVOS["aceptada"] += 1
+
     return mejor_i if mejor_i is not None else K_F

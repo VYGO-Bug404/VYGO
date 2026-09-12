@@ -39,8 +39,21 @@ _TARIFA_BETA_KM_MXN = (7.0, 11.0)
 # pedido cercano "quepa gratis" en la espera del primero -- eso es lo que hace rentable
 # agrupar en el modelo (docs/modelo-matematico.md §1.3).
 _PREP_MEDIA_MIN = (6.0, 35.0)
-_DESTINO_MEDIANA_KM = 3.5
 N_COMPETIDORES_BASE = 25
+
+# Geografía por clústeres (tarea "diagnostico de agrupamiento y clusters de comercios"):
+# reemplaza el muestreo por densidad de fondo sobre TODA la rejilla -- ese esquema dispersa
+# los comercios uniformemente aunque unas celdas pesen más, así que dos comercios rara vez
+# caen a <1km uno del otro. Replica plazas comerciales / corredores gastronómicos reales:
+# N_ZONAS_DENSAS focos, N_COMERCIOS_POR_ZONA comercios cada uno dentro de un disco de radio
+# RADIO_ZONA_M, más N_COMERCIOS_DISPERSOS de relleno sobre el resto de la rejilla.
+N_ZONAS_DENSAS = 4
+N_COMERCIOS_POR_ZONA = 15
+N_COMERCIOS_DISPERSOS = 20
+RADIO_ZONA_M = 1500.0
+# Destinos: dentro de este radio del comercio de ORIGEN, no un kernel sobre toda la rejilla
+# (docs/modelo-matematico.md §1.3: la entrega de comida queda cerca de donde se cocinó).
+RADIO_DESTINO_M = 2500.0
 
 ModificadorFn = Callable[[float, tuple[int, int]], tuple[float, float]]
 
@@ -88,21 +101,71 @@ def _perfil_llegada_hora(t: float) -> float:
     return 1.0 + 1.8 * pico_comida + 1.4 * pico_cena
 
 
-def muestrear_comercios(grid: GridWorld, m: int, rng: np.random.Generator) -> list[Comercio]:
-    """M comercios muestreados PONDERADOS por el mapa de densidad de zonas (no uniforme):
-    la concentración geográfica es lo que hace rentable el agrupamiento."""
+def _centros_zonas(grid: GridWorld, n_zonas: int) -> list[tuple[float, float]]:
+    """Centros repartidos en cuadrícula (sqrt(n_zonas) x sqrt(n_zonas) si es cuadrado
+    perfecto, si no en una franja) sobre el interior de la rejilla -- con margen suficiente
+    para que un disco de radio `RADIO_ZONA_M` quepa sin salirse. Con n_zonas=4 da los 4
+    cuadrantes clásicos: (n/4, n/4), (n/4, 3n/4), (3n/4, n/4), (3n/4, 3n/4)."""
 
-    pesos = grid.densidad.flatten().astype(np.float64)
-    pesos = pesos / pesos.sum()
-    indices = rng.choice(grid.n * grid.n, size=m, replace=True, p=pesos)
-    comercios = []
-    for k, idx in enumerate(indices):
-        fila, col = divmod(int(idx), grid.n)
+    lado = math.isqrt(n_zonas)
+    if lado * lado != n_zonas:
+        # Fallback genérico (no es el caso por defecto n_zonas=4): franja 1 x n_zonas.
+        paso = grid.n / (n_zonas + 1)
+        return [(grid.n / 2.0, paso * (i + 1)) for i in range(n_zonas)]
+    paso = grid.n / (lado + 1)
+    return [(paso * (fi + 1), paso * (ci + 1)) for fi in range(lado) for ci in range(lado)]
+
+
+def _muestrear_en_disco(
+    centro: tuple[float, float], radio_celdas: float, grid: GridWorld, rng: np.random.Generator,
+) -> tuple[int, int]:
+    """Punto uniforme en área dentro del disco (r = radio*sqrt(u), no r = radio*u, para no
+    sobre-concentrar en el centro), recortado a los bordes de la rejilla."""
+
+    r = radio_celdas * math.sqrt(float(rng.uniform(0.0, 1.0)))
+    angulo = float(rng.uniform(0.0, 2 * math.pi))
+    fila = int(round(centro[0] + r * math.sin(angulo)))
+    col = int(round(centro[1] + r * math.cos(angulo)))
+    fila = min(max(fila, 0), grid.n - 1)
+    col = min(max(col, 0), grid.n - 1)
+    return fila, col
+
+
+def muestrear_comercios(grid: GridWorld, m: int, rng: np.random.Generator) -> list[Comercio]:
+    """CLÚSTERES explícitos, no densidad de fondo: `N_ZONAS_DENSAS` focos de alta
+    concentración (comercios dentro de un disco de radio `RADIO_ZONA_M` cada uno) más una
+    fracción dispersa de relleno sobre el resto de la rejilla, en la misma proporción que
+    `N_COMERCIOS_POR_ZONA`*`N_ZONAS_DENSAS` : `N_COMERCIOS_DISPERSOS` (60:20 con `m`=80, los
+    valores de la tarea). Con `m` distinto de 80 se escala la misma proporción. Esto es lo
+    que permite que dos recolecciones estén a <1km -- el muestreo por densidad de fondo
+    anterior las dispersaba sobre TODA la rejilla aunque unas celdas pesaran más."""
+
+    fraccion_dispersos = N_COMERCIOS_DISPERSOS / (N_ZONAS_DENSAS * N_COMERCIOS_POR_ZONA + N_COMERCIOS_DISPERSOS)
+    n_dispersos = max(0, round(m * fraccion_dispersos))
+    n_agrupados = m - n_dispersos
+    radio_zona_celdas = RADIO_ZONA_M / grid.cell_size_m
+    centros = _centros_zonas(grid, N_ZONAS_DENSAS)
+
+    comercios: list[Comercio] = []
+    for z, centro in enumerate(centros):
+        n_zona = n_agrupados // len(centros) + (1 if z < n_agrupados % len(centros) else 0)
+        for _ in range(n_zona):
+            fila, col = _muestrear_en_disco(centro, radio_zona_celdas, grid, rng)
+            media_min = rng.uniform(*_PREP_MEDIA_MIN)
+            comercios.append(Comercio(
+                id=f"c{len(comercios)}", pos=(fila, col), prep_media_s=media_min * 60.0,
+                intensidad=float(grid.densidad[fila, col]),
+            ))
+
+    for _ in range(n_dispersos):
+        fila = int(rng.integers(0, grid.n))
+        col = int(rng.integers(0, grid.n))
         media_min = rng.uniform(*_PREP_MEDIA_MIN)
         comercios.append(Comercio(
-            id=f"c{k}", pos=(fila, col), prep_media_s=media_min * 60.0,
+            id=f"c{len(comercios)}", pos=(fila, col), prep_media_s=media_min * 60.0,
             intensidad=float(grid.densidad[fila, col]),
         ))
+
     return comercios
 
 
@@ -203,16 +266,11 @@ class GeneradorPedidos:
         )
 
     def _muestrear_destino(self, origen: tuple[int, int]) -> tuple[int, int]:
-        """Kernel alrededor del comercio: distancia LogNormal (mediana 3.5 km, cola larga),
-        ángulo uniforme."""
-        mediana_celdas = _DESTINO_MEDIANA_KM * 1000.0 / self.grid.cell_size_m
-        r = float(self.rng.lognormal(mean=math.log(max(mediana_celdas, 0.5)), sigma=0.6))
-        angulo = float(self.rng.uniform(0.0, 2 * math.pi))
-        fila = int(round(origen[0] + r * math.sin(angulo)))
-        col = int(round(origen[1] + r * math.cos(angulo)))
-        fila = min(max(fila, 0), self.grid.n - 1)
-        col = min(max(col, 0), self.grid.n - 1)
-        return (fila, col)
+        """Dentro de `RADIO_DESTINO_M` del comercio de ORIGEN (no un kernel sobre toda la
+        rejilla): las entregas quedan cerca de donde se cocinó, lo que además hace que dos
+        pedidos del mismo corredor gastronómico compartan zona de entrega."""
+        radio_celdas = RADIO_DESTINO_M / self.grid.cell_size_m
+        return _muestrear_en_disco(origen, radio_celdas, self.grid, self.rng)
 
     def _tarifa(self, distancia_km: float, clima: Clima, zona: tuple[int, int], t: float) -> float:
         base = float(self.rng.uniform(*_TARIFA_BASE_MXN))

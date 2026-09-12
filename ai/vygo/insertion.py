@@ -107,14 +107,21 @@ def _restricciones_con_oferta(restricciones: Restricciones, oferta: OfertaCandid
 
 def mejor_insercion(
     plan: list[Parada], oferta: OfertaCandidata, estado: EstadoRuta,
+    _diagnostico: list[str] | None = None,
 ) -> tuple[list[Parada] | None, float, float]:
     """Prueba insertar (recogida_j, entrega_j) en cada posición válida del orden FIJO de
     `plan` (sin reordenar lo existente) y calendariza cada candidata. Devuelve
     (nuevo_plan_ordenado, tiempo_total, dist_total) de la mejor factible, o (None, inf, inf).
     Con m paradas existentes hay (m+1)(m+2)/2 posiciones -- 28 con m=6 (K_A=4 lleno menos
-    el pedido nuevo), nunca las 2520 secuencias de una re-enumeración completa."""
+    el pedido nuevo), nunca las 2520 secuencias de una re-enumeración completa.
+
+    `_diagnostico`: si se pasa una lista, se acumulan ahí los motivos ("capacidad",
+    "fecha_limite", "frescura") de CADA posición que falló -- instrumentación para el
+    histograma de feasibility.action_mask, ver ai/reports/HANDOFF.md."""
 
     if len(plan) + 2 > _MAX_STOPS_TOTAL:
+        if _diagnostico is not None:
+            _diagnostico.append("capacidad")
         return None, math.inf, math.inf
 
     m = len(plan)
@@ -133,6 +140,7 @@ def mejor_insercion(
             orden = list(range(p)) + [idx_recogida] + list(range(p, q)) + [idx_entrega] + list(range(q, m))
             resultado = verificar_y_calendarizar(
                 orden, paradas_todas, estado.t, estado.pos, estado.travel_fn, restricciones, arrays,
+                _diagnostico,
             )
             if resultado is None:
                 continue
@@ -148,11 +156,16 @@ def mejor_insercion(
 
 def eval_insertion(
     plan: list[Parada], oferta: OfertaCandidata, estado: EstadoRuta,
+    _diagnostico: list[str] | None = None,
 ) -> tuple[float, float, bool]:
     """Devuelve (delta_t_segundos, delta_dist_metros, factible). Inserción clásica barata
-    (`mejor_insercion`), no re-enumeración exacta -- ver docstring del módulo."""
+    (`mejor_insercion`), no re-enumeración exacta -- ver docstring del módulo.
+
+    `_diagnostico`: ver `mejor_insercion`; instrumentación opcional, no afecta el resultado."""
 
     if len(plan) + 2 > _MAX_STOPS_TOTAL:
+        if _diagnostico is not None:
+            _diagnostico.append("capacidad")
         return math.inf, math.inf, False
 
     _orden_base, tiempo_base, dist_base, _exacto_base, _eval_base = baseline_plan(estado)
@@ -163,7 +176,7 @@ def eval_insertion(
     if not plan:
         tiempo_base, dist_base = 0.0, 0.0
 
-    _nuevo_plan, tiempo_nuevo, dist_nuevo = mejor_insercion(plan, oferta, estado)
+    _nuevo_plan, tiempo_nuevo, dist_nuevo = mejor_insercion(plan, oferta, estado, _diagnostico)
     if _nuevo_plan is None:
         return math.inf, math.inf, False
 

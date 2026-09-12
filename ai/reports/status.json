@@ -1,7 +1,7 @@
 {
-  "generado_en": "2026-09-12T13:36:29+00:00",
-  "bloque": "B2-insercion-barata-y-decision-por-ronda",
-  "commit": "e6f01a1",
+  "generado_en": "2026-09-12T14:29:06+00:00",
+  "bloque": "B3-diagnostico-agrupamiento-y-clusters",
+  "commit": "721432c",
   "dirty": true,
   "entorno": {
     "nivel": null,
@@ -27,12 +27,22 @@
       "estado": "no_implementado"
     },
     "B1": {
-      "rho": 0,
-      "estado": "no_implementado"
+      "rho": 227.11,
+      "pedidos_h": 4.98,
+      "puntualidad": 1.0,
+      "bundling": 0.68
     },
     "B2": {
-      "rho": 0,
-      "estado": "no_implementado"
+      "rho": 267.45,
+      "pedidos_h": 5.4,
+      "puntualidad": 1.0,
+      "bundling": 0.73
+    },
+    "B2_ingenuo": {
+      "rho": 267.45,
+      "pedidos_h": 5.4,
+      "puntualidad": 1.0,
+      "bundling": 0.74
     },
     "B3": {
       "rho": 0,
@@ -65,10 +75,12 @@
   },
   "diagnostico_automatico": [],
   "bloqueos": [
-    "BLOQUEO PRINCIPAL: la prueba de sanidad SÍ se completó esta vez (20 escenarios, turno de 2h, entorno ya rápido) y el generador NO pasa el criterio: B2 sólo supera a B1 por +9.3% (umbral 15%) y factor_agrupamiento(B2)=0.97 (umbral 1.4). Un intento de retunear (intensidad de llegada x3, techo de preparación 25->35 min) no mostró mejora clara sobre una muestra más chica (5 escenarios, por presupuesto de tiempo): +3.4%, bundling=0.92. No se investigó más a fondo (p.ej. concentrar geográficamente los comercios, la palanca que falta probar). Conclusión: NO hay evidencia de que el generador produzca oportunidad de agrupamiento suficiente para entrenar todavía. Ver reports/HANDOFF.md.",
-    "En L0 no hay competidores sintéticos (n_competidores_base=0 por diseño), así que p_gana_estimada=1.0 siempre y la comparación B2 vs B2-ingenuo no es significativa en L0 -- hace falta L1 para medirla de verdad.",
+    "BLOQUEO PRINCIPAL (persiste, causa distinta a la que se sospechaba): el histograma de motivos de rechazo (5 y luego 20 escenarios, B2, ver HANDOFF) muestra que ~96-99.7% de las ofertas evaluadas con plan activo no se rechazan por capacidad del vehículo, frescura, fecha límite, prefiltro ni umbral_rho -- se rechazan porque el plan YA está en el tope duro K_A_MAXIMO=3 (`sequencer.UMBRAL_EXACTO_PEDIDOS`, bajado de 4 a 3 en el bloque anterior por presupuesto de steps/s). Ninguno de los 4 candidatos de la tarea (Q de vehículo, theta de frescura, N_PREFILTRO, fórmula de tarifa) domina el histograma (todos <3% combinados) así que, por la regla de la propia tarea ('arregla sólo lo que el histograma señale'), NO se tocó ninguno de los 4. Subir K_A_MAXIMO SÍ atacaría la causa real pero es un cambio de presupuesto de rendimiento (vuelve a 2520 secuencias exactas por reoptimización), no uno de los candidatos autorizados hoy -- queda documentado como decisión pendiente, no aplicado unilateralmente.",
+    "Clústeres geográficos de comercios aplicados (generator.muestrear_comercios: 4 zonas x 15 comercios en disco de 1.5km + 20 dispersos; destinos a <2.5km del origen). Resultado tras 20 escenarios x 2h: B2 vs B1 +17.8% (SÍ supera el umbral de 15%, antes +9.3%), pero factor_agrupamiento(B2)=0.73 (bajó de 0.97, sigue muy por debajo del umbral 1.4 -- y ahora por debajo de 1.0, no cerca). Por la propia regla de la tarea ('si se queda cerca de 1.0, seguimos igual: el valor del agente está en la selección'): NO se sigue tocando el generador. +17.8% sobre B1 es el resultado presentable de este bloque.",
+    "rho_hat observado (227-275 MXN/h) sigue por encima del rango 120-180 MXN/h que la tarea esperaba de la fórmula de tarifa (base 28-38 + beta 7-11/km). No se investigó la fórmula porque 'umbral_rho' es <0.02% del histograma de rechazos (no está gateando decisiones) -- posible instrumento de medición mal calibrado más que un bug de conversión, pendiente para un bloque futuro si importa.",
+    "En L0 no hay competidores sintéticos (n_competidores_base=0 por diseño), así que p_gana_estimada=1.0 siempre; B2 vs B2-ingenuo dio +0.0% en esta corrida -- consistente con L0, no una regresión. Hace falta L1 para medir el valor real de p_gana.",
     "train_ppo.py, evaluate.py, export_vygo.py siguen siendo stubs sin cuerpo.",
     "baselines B0 (aleatoria) y B3 (MILP rodante) no implementados -- sólo B1/B2/B2-ingenuo (docs/vygo-ai-training.md §6.1); scenarios/test_50.pkl no existe."
   ],
-  "siguiente_paso_sugerido": "Concentrar geográficamente el muestreo de comercios (generator.muestrear_comercios) para crear oportunidad de agrupamiento real, y volver a correr la prueba de sanidad completa antes de considerar entrenamiento."
+  "siguiente_paso_sugerido": "El generador queda congelado (regla explícita de la tarea). Decidir si vale la pena subir K_A_MAXIMO/UMBRAL_EXACTO_PEDIDOS por encima de 3 (causa real y dominante del histograma de rechazos) a cambio de steps/s, y de ahí avanzar a implementar train_ppo.py -- el criterio de selección (+17.8% B2 vs B1) ya es presentable con el estado actual."
 }

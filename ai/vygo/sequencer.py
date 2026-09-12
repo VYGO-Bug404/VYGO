@@ -476,6 +476,7 @@ def verificar_y_calendarizar(
     travel_fn: TravelFn,
     restricciones: Restricciones,
     _arrays: tuple | None = None,
+    _diagnostico: list[str] | None = None,
 ) -> tuple[list[float], list[float], float] | None:
     """Punto fijo acotado: en cada iteración simula el orden con las esperas estratégicas
     fijadas hasta ahora, checa fechas límite, y para cada pedido cuya frescura lo exija,
@@ -490,7 +491,11 @@ def verificar_y_calendarizar(
     `_arrays`: salida de `_arrays_calendario(paradas, restricciones)` ya calculada, para
     quien (como `held_karp`) va a calendarizar MUCHAS órdenes sobre el mismo `paradas` +
     `restricciones` y no quiere repetir ese cómputo por cada una (era costo dominante del
-    benchmark con miles de candidatas, ver HANDOFF). Uso normal: se omite y se calcula aquí."""
+    benchmark con miles de candidatas, ver HANDOFF). Uso normal: se omite y se calcula aquí.
+
+    `_diagnostico`: si se pasa una lista, se le hace `append` del motivo exacto ("capacidad",
+    "fecha_limite" o "frescura") cuando se devuelve None -- instrumentación para el
+    histograma de motivos de rechazo de feasibility.action_mask, no afecta el resultado."""
 
     if _arrays is None:
         _arrays = _arrays_calendario(paradas, restricciones)
@@ -515,11 +520,15 @@ def verificar_y_calendarizar(
             restricciones.capacidad, pins, carga_base,
         )
         if resultado is None:
+            if _diagnostico is not None:
+                _diagnostico.append("capacidad")
             return None
         llegadas, salidas, dist_total = resultado
 
         for k, idx in enumerate(orden):
             if not es_recogida[idx] and llegadas[k] > l_idx[idx] + _EPS:
+                if _diagnostico is not None:
+                    _diagnostico.append("fecha_limite")
                 return None
 
         cotas = _cotas_tardias(orden, es_recogida, l_idx, llegadas, salidas)
@@ -537,11 +546,18 @@ def verificar_y_calendarizar(
                 continue
 
             if idx_r in gap_previo and gap_actual >= gap_previo[idx_r] - _EPS:
-                return None  # posponer no está reduciendo el hueco: no hay forma de cerrarlo
+                # posponer no está reduciendo el hueco: no hay forma de cerrarlo
+                if _diagnostico is not None:
+                    _diagnostico.append("frescura")
+                return None
 
             requerido = llegadas[k_e] - theta
             if requerido > cotas[k_r] + _EPS:
-                return None  # no cabe sin romper una fecha límite aguas abajo
+                # no cabe sin romper una fecha límite aguas abajo: el origen es la
+                # frescura (exige posponer), lo que lo bloquea es un límite existente.
+                if _diagnostico is not None:
+                    _diagnostico.append("frescura")
+                return None
             gap_previo[idx_r] = gap_actual
             pins[idx_r] = max(pins.get(idx_r, -math.inf), requerido)
             cambio = True
@@ -549,6 +565,8 @@ def verificar_y_calendarizar(
         if not cambio:
             return llegadas, salidas, dist_total
 
+    if _diagnostico is not None:
+        _diagnostico.append("frescura")
     return None
 
 

@@ -12,20 +12,23 @@ Uso: python -m vygo.sanity_check
 
 from __future__ import annotations
 
+import sys
 import time
 
 import numpy as np
 
 from vygo.baselines import RhoHatMovil, politica_primera_factible, politica_umbral
 from vygo.env import VygoEnv
+from vygo.feasibility import CONTADOR_MOTIVOS, reset_contador_motivos
 
 N_ESCENARIOS = 20
 DURACION_TURNO_S = 2 * 3600.0
 MAX_PASOS_SEGURIDAD = 20_000  # red de seguridad; un turno de 2h no debería necesitar tantos
 
 
-def _correr(seed: int, politica: str) -> dict:
-    env = VygoEnv(nivel="L0", m_comercios=50, duracion_turno_s=DURACION_TURNO_S)
+def _correr(seed: int, politica: str, instrumentar: bool = False) -> dict:
+    # m_comercios=80 = 4 zonas x 15 comercios + 20 dispersos (generator.muestrear_comercios).
+    env = VygoEnv(nivel="L0", m_comercios=80, duracion_turno_s=DURACION_TURNO_S)
     obs, info = env.reset(seed=seed)
     rho_movil = RhoHatMovil()
 
@@ -34,7 +37,7 @@ def _correr(seed: int, politica: str) -> dict:
         if politica == "B1":
             a = politica_primera_factible(estado)
         elif politica == "B2":
-            a = politica_umbral(estado, rho_movil.valor, con_p_gana=True)
+            a = politica_umbral(estado, rho_movil.valor, con_p_gana=True, instrumentar=instrumentar)
         elif politica == "B2_ingenuo":
             a = politica_umbral(estado, rho_movil.valor, con_p_gana=False)
         else:
@@ -56,12 +59,42 @@ def _correr(seed: int, politica: str) -> dict:
     }
 
 
+def imprimir_histograma(titulo: str) -> None:
+    """Histograma de motivos de rechazo acumulados en CONTADOR_MOTIVOS (sólo ofertas
+    evaluadas con el plan activo ya con >=1 pedido, ver feasibility.py). Categorías:
+    capacidad | frescura | fecha_limite | prefiltro | tope_ka | umbral_rho | aceptada."""
+
+    total = sum(CONTADOR_MOTIVOS.values())
+    print(f"\n{titulo} (total={total})")
+    if total == 0:
+        print("  (sin datos: ningún caso con plan activo >=1 pedido)")
+        return
+    for motivo, n in CONTADOR_MOTIVOS.most_common():
+        pct = 100.0 * n / total
+        print(f"  {motivo:12s} {n:7d}  ({pct:5.1f}%)")
+
+
+def diagnostico_motivos(n_escenarios: int = 5) -> None:
+    """Punto 1 de la tarea 'diagnostico de agrupamiento': corre N escenarios de 2h con B2
+    (instrumentado) y muestra la distribución de motivos de rechazo. NO cambiar nada del
+    generador/entorno hasta ver esta distribución -- eso decide qué arreglar."""
+
+    reset_contador_motivos()
+    t0 = time.perf_counter()
+    for seed in range(n_escenarios):
+        _correr(seed, "B2", instrumentar=True)
+    dt = time.perf_counter() - t0
+    print(f"Diagnóstico -- {n_escenarios} escenarios x turno de 2h (L0, B2), {dt:.1f}s de cómputo")
+    imprimir_histograma("Histograma de motivos de rechazo -- B2")
+
+
 def main() -> None:
+    reset_contador_motivos()
     resultados = {"B1": [], "B2": [], "B2_ingenuo": []}
     t0 = time.perf_counter()
     for seed in range(N_ESCENARIOS):
         for politica in resultados:
-            resultados[politica].append(_correr(seed, politica))
+            resultados[politica].append(_correr(seed, politica, instrumentar=(politica == "B2")))
     dt = time.perf_counter() - t0
 
     resumen = {}
@@ -109,6 +142,11 @@ def main() -> None:
     else:
         print("\nOK: B2 supera a B1 por >=15% y bundling(B2)>=1.4.")
 
+    imprimir_histograma("Histograma de motivos de rechazo -- B2 (mismos escenarios de arriba)")
+
 
 if __name__ == "__main__":
-    main()
+    if "--diagnostico" in sys.argv:
+        diagnostico_motivos(5)
+    else:
+        main()
