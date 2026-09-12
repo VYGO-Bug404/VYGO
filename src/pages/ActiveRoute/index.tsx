@@ -155,7 +155,7 @@ export function ActiveRoutePage() {
               Seguir trabajando
             </Button>
             <button
-              onClick={tryEndShift}
+              onClick={() => tryEndShift(() => navigate('/'))}
               className="flex items-center justify-center gap-2 w-full h-12 rounded-2xl border border-vygo-danger/30 bg-vygo-danger/5 text-vygo-danger text-sm font-semibold hover:bg-vygo-danger/10 transition-colors"
             >
               <LogOut size={15} />
@@ -298,7 +298,7 @@ export function ActiveRoutePage() {
 
             {/* Terminar jornada */}
             <button
-              onClick={() => tryEndShift()}
+              onClick={() => tryEndShift(() => navigate('/'))}
               className="flex items-center justify-center gap-1.5 w-full py-2 rounded-xl border border-vygo-danger/25 bg-vygo-danger/5 text-vygo-danger text-xs font-medium hover:bg-vygo-danger/10 transition-colors"
             >
               <LogOut size={12} />

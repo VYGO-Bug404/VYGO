@@ -114,7 +114,7 @@ export function ProfilePage() {
         {/* Logout */}
         {status !== 'offline' && (
           <button
-            onClick={tryEndShift}
+            onClick={() => tryEndShift()}
             className="flex items-center justify-center gap-2 w-full h-12 rounded-2xl border border-vygo-danger/30 bg-vygo-danger/5 text-vygo-danger text-sm font-semibold hover:bg-vygo-danger/10 transition-colors"
           >
             <LogOut size={16} />

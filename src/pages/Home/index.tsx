@@ -191,7 +191,7 @@ export function HomePage() {
         {/* ── Terminar jornada ── */}
         {isOnline && (
           <button
-            onClick={tryEndShift}
+            onClick={() => tryEndShift()}
             className="flex items-center justify-center gap-2 w-full h-10 rounded-2xl text-vygo-secondary/60 text-sm hover:text-vygo-danger transition-colors"
           >
             <StopCircle size={14} />
