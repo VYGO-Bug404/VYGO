@@ -1,18 +1,23 @@
 import { useRef, useEffect, useState } from 'react'
-import * as maplibregl from 'maplibre-gl'
-import 'maplibre-gl/dist/maplibre-gl.css'
+import {
+  Map as MLMap,
+  Marker,
+  AttributionControl,
+  NavigationControl,
+  type GeoJSONSource,
+  type StyleSpecification,
+} from 'maplibre-gl'
 import { cn } from '@/lib/utils'
 import type { Order } from '@/types/order'
 
-// Shape the routing algorithm should return
 export interface RouteGeoJSON {
   type: 'LineString'
-  coordinates: [number, number][] // [lng, lat][]
+  coordinates: [number, number][]
 }
 
 interface MockMapProps {
   activeOrders?: Order[]
-  routeGeoJSON?: RouteGeoJSON | null   // pass this from your routing algorithm
+  routeGeoJSON?: RouteGeoJSON | null
   className?: string
   showFullRoute?: boolean
 }
@@ -25,107 +30,122 @@ const PLATFORM_COLORS: Record<string, string> = {
   didi: '#F97316',
 }
 
-const MAPTILER_KEY = import.meta.env.VITE_MAPTILER_KEY
+const KEY = import.meta.env.VITE_MAPTILER_KEY
 
-// Returns a dark map style.
-// With VITE_MAPTILER_KEY → full vector dark (best quality).
-// Without key → Esri World Dark Gray Canvas (free, no key, dark ✓).
-function buildStyle(): maplibregl.StyleSpecification | string {
-  if (MAPTILER_KEY) {
-    return `https://api.maptiler.com/maps/dataviz-dark/style.json?key=${MAPTILER_KEY}`
-  }
-  // Esri World Dark Gray — no API key required
-  // Note: Esri tile path format is {z}/{y}/{x} (y before x)
+function buildStyle(): StyleSpecification {
+  // Raster tiles — simpler and more reliable than fetching a style JSON
+  const tiles = KEY
+    ? [`https://api.maptiler.com/maps/dataviz-dark/{z}/{x}/{y}.png?key=${KEY}`]
+    : [
+        'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}',
+      ]
+
   return {
     version: 8,
     sources: {
-      'esri-base': {
+      basemap: {
         type: 'raster',
-        tiles: [
-          'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}',
-        ],
+        tiles,
         tileSize: 256,
-        attribution: '© Esri, HERE, Garmin, © OpenStreetMap contributors',
-        maxzoom: 16,
-      },
-      'esri-ref': {
-        type: 'raster',
-        tiles: [
-          'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}',
-        ],
-        tileSize: 256,
-        maxzoom: 16,
+        attribution: KEY
+          ? '© MapTiler © OpenStreetMap contributors'
+          : '© Esri © OpenStreetMap contributors',
+        maxzoom: KEY ? 22 : 16,
       },
     },
-    layers: [
-      { id: 'esri-base-layer', type: 'raster', source: 'esri-base' },
-      { id: 'esri-ref-layer',  type: 'raster', source: 'esri-ref'  },
-    ],
-  } satisfies maplibregl.StyleSpecification
+    layers: [{ id: 'basemap', type: 'raster', source: 'basemap' }],
+  }
 }
 
-export function MockMap({ activeOrders = [], routeGeoJSON, className, showFullRoute = false }: MockMapProps) {
-  const containerRef = useRef<HTMLDivElement>(null)
-  const mapRef = useRef<maplibregl.Map | null>(null)
-  const markersRef = useRef<maplibregl.Marker[]>([])
-  const driverMarkerRef = useRef<maplibregl.Marker | null>(null)
-  const watchIdRef = useRef<number | null>(null)
+export function MockMap({
+  activeOrders = [],
+  routeGeoJSON,
+  className,
+  showFullRoute = false,
+}: MockMapProps) {
+  const wrapRef = useRef<HTMLDivElement>(null)
+  const mapRef = useRef<MLMap | null>(null)
+  const markersRef = useRef<Marker[]>([])
+  const driverRef = useRef<Marker | null>(null)
+  const watchRef = useRef<number | null>(null)
   const [ready, setReady] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   // ── Init map ──────────────────────────────────────────────
   useEffect(() => {
-    if (!containerRef.current || mapRef.current) return
+    const wrap = wrapRef.current
+    if (!wrap || mapRef.current) return
 
-    const map = new maplibregl.Map({
-      container: containerRef.current,
-      style: buildStyle(),
-      center: MONTERREY,
-      zoom: 13,
-      attributionControl: false,
-    })
+    let raf: number
+    let map: MLMap | null = null
 
-    map.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-left')
-    map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-right')
+    const init = () => {
+      if (mapRef.current) return
+      try {
+        map = new MLMap({
+          container: wrap,
+          style: buildStyle(),
+          center: MONTERREY,
+          zoom: 13,
+          attributionControl: false,
+        })
 
-    map.on('load', () => {
-      // Route line source (updated externally via routeGeoJSON prop)
-      map.addSource('route', {
-        type: 'geojson',
-        data: { type: 'FeatureCollection', features: [] },
-      })
-      map.addLayer({
-        id: 'route-casing',
-        type: 'line',
-        source: 'route',
-        layout: { 'line-cap': 'round', 'line-join': 'round' },
-        paint: { 'line-color': '#0B1215', 'line-width': 8, 'line-opacity': 0.6 },
-      })
-      map.addLayer({
-        id: 'route-line',
-        type: 'line',
-        source: 'route',
-        layout: { 'line-cap': 'round', 'line-join': 'round' },
-        paint: { 'line-color': '#00C875', 'line-width': 4, 'line-opacity': 1 },
-      })
+        map.addControl(new AttributionControl({ compact: true }), 'bottom-left')
+        map.addControl(new NavigationControl({ showCompass: false }), 'bottom-right')
 
-      setReady(true)
-    })
+        map.on('error', (e) => {
+          console.error('[VYGO Map]', e.error)
+          setError(e.error?.message ?? 'Error cargando el mapa')
+        })
 
-    mapRef.current = map
+        map.on('load', () => {
+          map!.resize()
+          map!.addSource('route', {
+            type: 'geojson',
+            data: { type: 'FeatureCollection', features: [] },
+          })
+          map!.addLayer({
+            id: 'route-casing',
+            type: 'line',
+            source: 'route',
+            layout: { 'line-cap': 'round', 'line-join': 'round' },
+            paint: { 'line-color': '#0B1215', 'line-width': 8, 'line-opacity': 0.6 },
+          })
+          map!.addLayer({
+            id: 'route-line',
+            type: 'line',
+            source: 'route',
+            layout: { 'line-cap': 'round', 'line-join': 'round' },
+            paint: { 'line-color': '#00C875', 'line-width': 4 },
+          })
+          setReady(true)
+        })
+
+        mapRef.current = map
+      } catch (err) {
+        console.error('[VYGO Map init]', err)
+        setError(String(err))
+      }
+    }
+
+    // Wait one frame so CSS layout is applied before MapLibre reads dimensions
+    raf = requestAnimationFrame(init)
+
     return () => {
-      map.remove()
+      cancelAnimationFrame(raf)
+      map?.remove()
       mapRef.current = null
       setReady(false)
+      setError(null)
     }
   }, [])
 
-  // ── Update route GeoJSON ──────────────────────────────────
+  // ── Route line ────────────────────────────────────────────
   useEffect(() => {
     const map = mapRef.current
     if (!map || !ready) return
-    const src = map.getSource('route') as maplibregl.GeoJSONSource | undefined
+    const src = map.getSource('route') as GeoJSONSource | undefined
     if (!src) return
-
     src.setData(
       routeGeoJSON
         ? { type: 'Feature', geometry: routeGeoJSON, properties: {} }
@@ -133,7 +153,7 @@ export function MockMap({ activeOrders = [], routeGeoJSON, className, showFullRo
     )
   }, [routeGeoJSON, ready])
 
-  // ── Update delivery markers ───────────────────────────────
+  // ── Pickup + Dropoff markers ──────────────────────────────
   useEffect(() => {
     const map = mapRef.current
     if (!map || !ready) return
@@ -141,46 +161,57 @@ export function MockMap({ activeOrders = [], routeGeoJSON, className, showFullRo
     markersRef.current.forEach((m) => m.remove())
     markersRef.current = []
 
-    const bounds = new maplibregl.LngLatBounds()
-    let hasBounds = false
-
     activeOrders.forEach((order, i) => {
-      const color = PLATFORM_COLORS[order.platform] ?? '#94A3B8'
-      const el = document.createElement('div')
-      el.style.cssText = `
-        width:32px;height:32px;
-        background:#11191D;
-        border:2px solid #00C875;
-        border-radius:50%;
-        display:flex;align-items:center;justify-content:center;
-        font-family:Inter,sans-serif;font-weight:700;font-size:13px;
-        color:${color};
-        box-shadow:0 2px 10px rgba(0,0,0,0.6);
-        cursor:pointer;
+      const platformColor = PLATFORM_COLORS[order.platform] ?? '#94A3B8'
+      const num = String(i + 1)
+
+      // ── Pickup marker (circle verde — "Recoger") ──
+      const pickupEl = document.createElement('div')
+      pickupEl.style.cssText = `
+        width:32px;height:32px;background:#11191D;border:2.5px solid #00C875;
+        border-radius:50%;display:flex;align-items:center;justify-content:center;
+        font-family:Inter,sans-serif;font-weight:700;font-size:13px;color:${platformColor};
+        box-shadow:0 2px 10px rgba(0,0,0,0.7);cursor:pointer;position:relative;
       `
-      el.textContent = String(i + 1)
-
-      const lngLat: [number, number] = [order.pickup.lng, order.pickup.lat]
-      new maplibregl.Marker({ element: el, anchor: 'center' })
-        .setLngLat(lngLat)
+      pickupEl.innerHTML = `
+        <span>${num}</span>
+        <div style="position:absolute;top:-6px;right:-6px;width:14px;height:14px;background:#00C875;
+          border-radius:50%;border:1.5px solid #0B1215;display:flex;align-items:center;
+          justify-content:center;font-size:8px;color:#0B1215;font-weight:900;line-height:1;">R</div>
+      `
+      const pickup = new Marker({ element: pickupEl, anchor: 'center' })
+        .setLngLat([order.pickup.lng, order.pickup.lat])
         .addTo(map)
+      markersRef.current.push(pickup)
 
-      bounds.extend(lngLat)
-      bounds.extend([order.dropoff.lng, order.dropoff.lat])
-      hasBounds = true
+      // ── Dropoff marker (teardrop naranja — "Entregar") ──
+      const dropoffEl = document.createElement('div')
+      dropoffEl.style.cssText = `
+        width:28px;height:36px;display:flex;flex-direction:column;
+        align-items:center;cursor:pointer;
+      `
+      dropoffEl.innerHTML = `
+        <div style="width:28px;height:28px;background:#F5A524;border:2px solid #0B1215;
+          border-radius:50% 50% 50% 0;transform:rotate(-45deg);
+          box-shadow:0 2px 10px rgba(0,0,0,0.7);display:flex;align-items:center;
+          justify-content:center;">
+          <span style="transform:rotate(45deg);font-family:Inter,sans-serif;
+            font-weight:900;font-size:11px;color:#0B1215;">${num}</span>
+        </div>
+        <div style="width:2px;height:8px;background:#F5A524;margin-top:0;"></div>
+      `
+      const dropoff = new Marker({ element: dropoffEl, anchor: 'bottom' })
+        .setLngLat([order.dropoff.lng, order.dropoff.lat])
+        .addTo(map)
+      markersRef.current.push(dropoff)
     })
-
-    if (hasBounds && activeOrders.length > 0) {
-      map.fitBounds(bounds, { padding: 80, maxZoom: 15, duration: 800 })
-    }
   }, [activeOrders, ready])
 
-  // ── Driver position (real GPS) ────────────────────────────
+  // ── Driver GPS marker ─────────────────────────────────────
   useEffect(() => {
     const map = mapRef.current
     if (!map || !ready) return
 
-    // Driver marker
     const el = document.createElement('div')
     el.style.cssText = 'width:24px;height:24px;position:relative;'
     el.innerHTML = `
@@ -188,47 +219,67 @@ export function MockMap({ activeOrders = [], routeGeoJSON, className, showFullRo
       <div style="position:absolute;inset:4px;background:#00C875;border-radius:50%;border:2.5px solid #0B1215;box-shadow:0 0 8px rgba(0,200,117,0.5);"></div>
     `
 
-    const marker = new maplibregl.Marker({ element: el, anchor: 'center' })
+    const marker = new Marker({ element: el, anchor: 'center' })
       .setLngLat(MONTERREY)
       .addTo(map)
-    driverMarkerRef.current = marker
+    driverRef.current = marker
 
     if (navigator.geolocation) {
-      watchIdRef.current = navigator.geolocation.watchPosition(
-        (pos) => {
-          const coords: [number, number] = [pos.coords.longitude, pos.coords.latitude]
-          marker.setLngLat(coords)
-        },
-        () => {}, // fallback to MONTERREY silently
+      watchRef.current = navigator.geolocation.watchPosition(
+        (pos) => marker.setLngLat([pos.coords.longitude, pos.coords.latitude]),
+        () => {},
         { enableHighAccuracy: true, maximumAge: 3000 }
       )
     }
 
     return () => {
       marker.remove()
-      if (watchIdRef.current !== null) {
-        navigator.geolocation.clearWatch(watchIdRef.current)
-      }
+      if (watchRef.current !== null) navigator.geolocation.clearWatch(watchRef.current)
     }
   }, [ready])
 
   return (
-    <div className={cn('relative overflow-hidden', className)}>
-      <div ref={containerRef} className="w-full h-full" />
+    <div className={cn('relative overflow-hidden bg-[#0B1215]', className)}>
+      <div ref={wrapRef} className="w-full h-full" />
 
-      {/* Tip para activar vector tiles — solo cuando no hay key */}
-      {!MAPTILER_KEY && (
-        <div className="absolute bottom-10 left-1/2 -translate-x-1/2 z-10 pointer-events-none whitespace-nowrap">
-          <div className="bg-black/70 backdrop-blur-sm text-vygo-secondary text-[10px] px-3 py-1.5 rounded-full border border-vygo-border">
-            Agrega <code className="text-vygo-warning">VITE_MAPTILER_KEY</code> en .env.local para vector tiles
+      {/* Error state */}
+      {error && (
+        <div className="absolute inset-0 flex items-center justify-center bg-vygo-bg/90 z-10">
+          <div className="text-center px-6">
+            <p className="text-vygo-danger text-sm font-semibold mb-1">Error al cargar mapa</p>
+            <p className="text-vygo-secondary text-xs">{error}</p>
           </div>
         </div>
       )}
 
-      {showFullRoute && (
-        <div className="absolute top-3 right-3 pointer-events-none z-10 bg-black/60 backdrop-blur-sm rounded-xl px-2.5 py-1.5 border border-vygo-border flex items-center gap-1.5">
-          <span className="w-2 h-2 rounded-full bg-vygo-green animate-pulse" />
-          <span className="text-xs text-vygo-green font-medium">En vivo</span>
+      {showFullRoute && !error && (
+        <div className="absolute top-3 right-3 pointer-events-none z-10 flex flex-col items-end gap-1.5">
+          {/* En vivo badge */}
+          <div className="bg-black/60 backdrop-blur-sm rounded-xl px-2.5 py-1.5 border border-vygo-border flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-vygo-green animate-pulse" />
+            <span className="text-xs text-vygo-green font-medium">En vivo</span>
+          </div>
+          {/* Leyenda */}
+          {activeOrders.length > 0 && (
+            <div className="bg-black/60 backdrop-blur-sm rounded-xl px-2.5 py-2 border border-vygo-border flex flex-col gap-1">
+              <div className="flex items-center gap-1.5">
+                <div className="w-4 h-4 rounded-full bg-vygo-card border-2 border-vygo-green flex-shrink-0" />
+                <span className="text-[10px] text-vygo-secondary">Recoger</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <div className="w-4 h-4 rounded-full bg-vygo-warning flex-shrink-0" />
+                <span className="text-[10px] text-vygo-secondary">Entregar</span>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {!KEY && !error && (
+        <div className="absolute bottom-10 left-1/2 -translate-x-1/2 z-10 pointer-events-none whitespace-nowrap">
+          <div className="bg-black/70 backdrop-blur-sm text-vygo-secondary text-[10px] px-3 py-1.5 rounded-full border border-vygo-border">
+            Agrega <code className="text-vygo-warning">VITE_MAPTILER_KEY</code> para mapa vectorial
+          </div>
         </div>
       )}
     </div>
