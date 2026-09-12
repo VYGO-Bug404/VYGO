@@ -90,6 +90,11 @@ export function ActiveRoutePage() {
               <p className="text-xs text-vygo-secondary truncate pl-4">{destination}</p>
             )}
           </div>
+          {/* En vivo badge */}
+          <div className="flex items-center gap-1 flex-shrink-0">
+            <span className="w-2 h-2 rounded-full bg-vygo-green animate-pulse" />
+            <span className="text-[11px] text-vygo-green font-medium">En vivo</span>
+          </div>
         </div>
       </div>
 

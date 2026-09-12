@@ -252,28 +252,6 @@ export function MockMap({
         </div>
       )}
 
-      {showFullRoute && !error && (
-        <div className="absolute top-3 right-3 pointer-events-none z-10 flex flex-col items-end gap-1.5">
-          {/* En vivo badge */}
-          <div className="bg-black/60 backdrop-blur-sm rounded-xl px-2.5 py-1.5 border border-vygo-border flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-vygo-green animate-pulse" />
-            <span className="text-xs text-vygo-green font-medium">En vivo</span>
-          </div>
-          {/* Leyenda */}
-          {activeOrders.length > 0 && (
-            <div className="bg-black/60 backdrop-blur-sm rounded-xl px-2.5 py-2 border border-vygo-border flex flex-col gap-1">
-              <div className="flex items-center gap-1.5">
-                <div className="w-4 h-4 rounded-full bg-vygo-card border-2 border-vygo-green flex-shrink-0" />
-                <span className="text-[10px] text-vygo-secondary">Recoger</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <div className="w-4 h-4 rounded-full bg-vygo-warning flex-shrink-0" />
-                <span className="text-[10px] text-vygo-secondary">Entregar</span>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
 
       {!KEY && !error && (
         <div className="absolute bottom-10 left-1/2 -translate-x-1/2 z-10 pointer-events-none whitespace-nowrap">
