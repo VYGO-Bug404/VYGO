@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import {
   User,
   Bike,
@@ -12,8 +13,10 @@ import { useNavigate } from 'react-router-dom'
 import { useDriverStore } from '@/stores/driver.store'
 import { useAuthStore } from '@/stores/auth.store'
 import { useEndShift } from '@/hooks/useEndShift'
+import { usePlatformConnections } from '@/hooks/usePlatformConnections'
 import { EndShiftConfirm } from '@/components/EndShiftConfirm'
 import { PlatformBadge } from '@/components/PlatformBadge'
+import { PlatformConnectModal } from '@/components/PlatformConnectModal'
 import { PageHeader } from '@/components/layout/PageHeader'
 import type { Platform } from '@/types/order'
 
@@ -23,6 +26,8 @@ export function ProfilePage() {
   const status = useDriverStore((s) => s.status)
   const logout = useAuthStore((s) => s.logout)
   const { tryEndShift, confirming, confirmEnd, cancelConfirm, activeOrders } = useEndShift()
+  const { connections, loading: loadingPlatforms } = usePlatformConnections()
+  const [showPlatformModal, setShowPlatformModal] = useState(false)
 
   const handleLogout = async () => {
     await logout()
@@ -39,14 +44,15 @@ export function ProfilePage() {
     {
       icon: Shield,
       label: 'Plataformas conectadas',
-      subtitle: `${driver.platforms.length} conectadas`,
-      content: (
+      subtitle: loadingPlatforms ? 'Cargando…' : `${connections.length} conectada${connections.length !== 1 ? 's' : ''}`,
+      content: connections.length > 0 ? (
         <div className="flex items-center gap-1.5 mt-1.5">
-          {driver.platforms.map((p) => (
-            <PlatformBadge key={p} platform={p as Platform} size="sm" />
+          {connections.map((c) => (
+            <PlatformBadge key={c.platform} platform={c.platform as Platform} size="sm" />
           ))}
         </div>
-      ),
+      ) : undefined,
+      onPress: () => setShowPlatformModal(true),
     },
     { icon: Bell, label: 'Notificaciones' },
     { icon: HelpCircle, label: 'Soporte' },
@@ -93,9 +99,10 @@ export function ProfilePage() {
 
         {/* Menu */}
         <div className="bg-vygo-card border border-vygo-border rounded-2xl overflow-hidden divide-y divide-vygo-border">
-          {menuItems.map(({ icon: Icon, label, subtitle, content }) => (
+          {menuItems.map(({ icon: Icon, label, subtitle, content, onPress }) => (
             <button
               key={label}
+              onClick={onPress}
               className="flex items-center gap-3 px-4 py-3.5 w-full text-left hover:bg-vygo-card-2 transition-colors"
             >
               <div className="w-8 h-8 rounded-xl bg-vygo-card-2 flex items-center justify-center flex-shrink-0">
@@ -142,6 +149,10 @@ export function ProfilePage() {
           onConfirm={confirmEnd}
           onCancel={cancelConfirm}
         />
+      )}
+
+      {showPlatformModal && (
+        <PlatformConnectModal onClose={() => setShowPlatformModal(false)} />
       )}
     </div>
   )
