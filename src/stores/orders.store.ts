@@ -25,7 +25,14 @@ export const useOrdersStore = create<OrdersStore>((set, get) => ({
   setPendingOffer: (order) => set({ pendingOffer: order }),
 
   acceptOffer: (order) => {
-    const accepted: Order = { ...order, status: 'heading_to_pickup', acceptedAt: new Date() }
+    const { activeOrders, completedOrders } = get()
+    const nextRouteNumber = activeOrders.length + completedOrders.length + 1
+    const accepted: Order = {
+      ...order,
+      status: 'heading_to_pickup',
+      acceptedAt: new Date(),
+      routeNumber: order.routeNumber ?? nextRouteNumber,
+    }
     const projected = order.projectedEarningsPerHour ?? get().currentEarningsPerHour
     set((state) => ({
       activeOrders: [...state.activeOrders, accepted],

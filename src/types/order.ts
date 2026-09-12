@@ -21,6 +21,7 @@ export interface Location {
 export interface Order {
   id: string
   orderNumber: string
+  routeNumber?: number   // stable position in route (never renumbers)
   platform: Platform
   restaurantName: string
   earnings: number

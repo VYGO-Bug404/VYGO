@@ -162,45 +162,56 @@ export function MockMap({
     markersRef.current = []
 
     activeOrders.forEach((order, i) => {
-      const platformColor = PLATFORM_COLORS[order.platform] ?? '#94A3B8'
-      const num = String(i + 1)
+      const num = String(order.routeNumber ?? (i + 1))
+      const isFirst = (order.routeNumber ?? (i + 1)) === 1
 
-      // ── Pickup marker (circle verde — "Recoger") ──
+      // ── PICKUP marker ──
+      // Pedido 1 → círculo | Pedidos 2+ → triángulo
       const pickupEl = document.createElement('div')
-      pickupEl.style.cssText = `
-        width:32px;height:32px;background:#11191D;border:2.5px solid #00C875;
-        border-radius:50%;display:flex;align-items:center;justify-content:center;
-        font-family:Inter,sans-serif;font-weight:700;font-size:13px;color:${platformColor};
-        box-shadow:0 2px 10px rgba(0,0,0,0.7);cursor:pointer;position:relative;
-      `
-      pickupEl.innerHTML = `
-        <span>${num}</span>
-        <div style="position:absolute;top:-6px;right:-6px;width:14px;height:14px;background:#00C875;
-          border-radius:50%;border:1.5px solid #0B1215;display:flex;align-items:center;
-          justify-content:center;font-size:8px;color:#0B1215;font-weight:900;line-height:1;">R</div>
-      `
+      pickupEl.style.cssText = 'cursor:pointer;'
+
+      if (isFirst) {
+        // Círculo verde
+        pickupEl.innerHTML = `
+          <div style="width:34px;height:34px;background:#11191D;border:2.5px solid #00C875;
+            border-radius:50%;display:flex;align-items:center;justify-content:center;
+            font-family:Inter,sans-serif;font-weight:700;font-size:13px;color:#00C875;
+            box-shadow:0 2px 12px rgba(0,200,117,0.4);">
+            ${num}
+          </div>`
+      } else {
+        // Triángulo verde (SVG)
+        pickupEl.innerHTML = `
+          <div style="position:relative;width:36px;height:34px;display:flex;
+            align-items:center;justify-content:center;">
+            <svg width="36" height="34" viewBox="0 0 36 34" style="position:absolute;top:0;left:0;">
+              <polygon points="18,2 1,33 35,33" fill="#11191D"
+                stroke="#00C875" stroke-width="2.5" stroke-linejoin="round"/>
+            </svg>
+            <span style="position:relative;z-index:1;font-family:Inter,sans-serif;
+              font-weight:700;font-size:12px;color:#00C875;margin-top:8px;">${num}</span>
+          </div>`
+      }
+
       const pickup = new Marker({ element: pickupEl, anchor: 'center' })
         .setLngLat([order.pickup.lng, order.pickup.lat])
         .addTo(map)
       markersRef.current.push(pickup)
 
-      // ── Dropoff marker (teardrop naranja — "Entregar") ──
+      // ── DROPOFF marker — óvalo naranja ──
       const dropoffEl = document.createElement('div')
-      dropoffEl.style.cssText = `
-        width:28px;height:36px;display:flex;flex-direction:column;
-        align-items:center;cursor:pointer;
-      `
+      dropoffEl.style.cssText = 'cursor:pointer;'
       dropoffEl.innerHTML = `
-        <div style="width:28px;height:28px;background:#F5A524;border:2px solid #0B1215;
-          border-radius:50% 50% 50% 0;transform:rotate(-45deg);
-          box-shadow:0 2px 10px rgba(0,0,0,0.7);display:flex;align-items:center;
-          justify-content:center;">
-          <span style="transform:rotate(45deg);font-family:Inter,sans-serif;
-            font-weight:900;font-size:11px;color:#0B1215;">${num}</span>
-        </div>
-        <div style="width:2px;height:8px;background:#F5A524;margin-top:0;"></div>
-      `
-      const dropoff = new Marker({ element: dropoffEl, anchor: 'bottom' })
+        <div style="min-width:38px;height:26px;background:#F5A524;
+          border-radius:13px;border:2px solid #0B1215;
+          display:flex;align-items:center;justify-content:center;
+          padding:0 10px;
+          font-family:Inter,sans-serif;font-weight:700;font-size:12px;color:#0B1215;
+          box-shadow:0 2px 12px rgba(245,165,36,0.45);">
+          ${num}
+        </div>`
+
+      const dropoff = new Marker({ element: dropoffEl, anchor: 'center' })
         .setLngLat([order.dropoff.lng, order.dropoff.lat])
         .addTo(map)
       markersRef.current.push(dropoff)
