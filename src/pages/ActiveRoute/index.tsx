@@ -1,7 +1,8 @@
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, ChevronRight } from 'lucide-react'
+import { ArrowLeft, ChevronRight, LogOut } from 'lucide-react'
 import { useOrdersStore } from '@/stores/orders.store'
 import { useRouteStore } from '@/stores/route.store'
+import { useDriverStore } from '@/stores/driver.store'
 import { useActiveRoute } from '@/hooks/useActiveRoute'
 import { MockMap } from '@/components/maps/MockMap'
 import { PlatformBadge } from '@/components/PlatformBadge'
@@ -23,6 +24,7 @@ export function ActiveRoutePage() {
   const { currentStop, nextStop, totalStops } = useActiveRoute()
   const currentStopIndex = useRouteStore((s) => s.currentStopIndex)
 
+  const endShift = useDriverStore((s) => s.endShift)
   const primaryOrder = currentStop?.order ?? activeOrders[0] ?? null
   const nextOrder = nextStop?.order ?? activeOrders[1] ?? null
 
@@ -91,10 +93,10 @@ export function ActiveRoutePage() {
         </div>
       </div>
 
-      {/* BOTTOM CARD — sits right above the bottom nav (which is fixed z-40) */}
+      {/* BOTTOM CARD — sits above safe area, no nav on this screen */}
       <div
         className="absolute left-3 right-3 z-20"
-        style={{ bottom: `calc(72px + max(env(safe-area-inset-bottom, 0px), 8px))` }}
+        style={{ bottom: `max(env(safe-area-inset-bottom, 0px), 12px)` }}
       >
         <div className="bg-vygo-card/92 backdrop-blur-xl rounded-2xl border border-vygo-border shadow-sheet overflow-hidden">
           {/* Progress bar */}
@@ -143,6 +145,15 @@ export function ActiveRoutePage() {
                 </span>
               </div>
             )}
+
+            {/* Terminar jornada */}
+            <button
+              onClick={() => { endShift(); navigate('/') }}
+              className="flex items-center justify-center gap-1.5 w-full py-2 rounded-xl border border-vygo-danger/25 bg-vygo-danger/5 text-vygo-danger text-xs font-medium hover:bg-vygo-danger/10 transition-colors"
+            >
+              <LogOut size={12} />
+              Terminar jornada
+            </button>
           </div>
         </div>
       </div>

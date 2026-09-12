@@ -32,7 +32,7 @@ export function AppLayout() {
           </main>
         )}
 
-        <BottomNavigation />
+        {!isRouteScreen && <BottomNavigation />}
 
         {pendingOffer && <NewOrderSheet order={pendingOffer} />}
 
