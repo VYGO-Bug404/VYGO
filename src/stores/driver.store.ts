@@ -44,6 +44,9 @@ export const useDriverStore = create<DriverStore>((set, get) => ({
     set({
       status: 'offline',
       shiftStartedAt: null,
+      todayEarnings: 0,
+      earningsPerHour: 0,
+      completedOrders: 0,
     }),
 
   setStatus: (status) => set({ status }),

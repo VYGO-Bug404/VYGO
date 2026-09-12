@@ -31,7 +31,7 @@ export function EarningsPage() {
         // Recalculate platform breakdown from completed orders if we have any real ones
         byPlatform: completedOrdersList.length > 0
           ? buildPlatformBreakdown(completedOrdersList)
-          : mockSummary.byPlatform,
+          : [],
       }
     : mockSummary
 
@@ -52,6 +52,14 @@ export function EarningsPage() {
 
           {(['today', 'week', 'month'] as const).map((p) => (
             <TabsContent key={p} value={p}>
+              {/* Empty state for week/month */}
+              {p !== 'today' && summary.total === 0 && (
+                <div className="bg-vygo-card border border-vygo-border rounded-2xl p-8 text-center mb-4">
+                  <p className="text-vygo-secondary text-sm">Datos históricos próximamente</p>
+                  <p className="text-vygo-secondary/50 text-xs mt-1">Se conectarán desde el backend</p>
+                </div>
+              )}
+
               {/* Hero earnings */}
               <div className="bg-vygo-card border border-vygo-border rounded-2xl p-5 mb-4">
                 <p className="text-xs text-vygo-secondary font-medium uppercase tracking-wide mb-1">
@@ -160,38 +168,44 @@ export function EarningsPage() {
                   </p>
                 </div>
 
-                <div className="space-y-3">
-                  {summary.byPlatform
-                    .sort((a, b) => b.earningsPerKm - a.earningsPerKm)
-                    .map((p, i) => {
-                      const maxEarnings = Math.max(...summary.byPlatform.map((x) => x.totalEarnings))
-                      const barWidth = (p.totalEarnings / maxEarnings) * 100
-                      return (
-                        <div key={p.platform}>
-                          <div className="flex items-center justify-between mb-1">
-                            <div className="flex items-center gap-2">
-                              <PlatformBadge platform={p.platform as Platform} size="sm" />
-                              {i === 0 && (
-                                <span className="text-[9px] font-semibold text-vygo-green bg-vygo-green/10 px-1.5 py-0.5 rounded-full">
-                                  Más rentable
-                                </span>
-                              )}
+                {summary.byPlatform.length === 0 ? (
+                  <p className="text-xs text-vygo-secondary/60 text-center py-3">
+                    {p === 'today' ? 'Completa pedidos para ver el desglose' : 'Sin datos históricos aún'}
+                  </p>
+                ) : (
+                  <div className="space-y-3">
+                    {summary.byPlatform
+                      .sort((a, b) => b.earningsPerKm - a.earningsPerKm)
+                      .map((plat, i) => {
+                        const maxEarnings = Math.max(...summary.byPlatform.map((x) => x.totalEarnings))
+                        const barWidth = maxEarnings > 0 ? (plat.totalEarnings / maxEarnings) * 100 : 0
+                        return (
+                          <div key={plat.platform}>
+                            <div className="flex items-center justify-between mb-1">
+                              <div className="flex items-center gap-2">
+                                <PlatformBadge platform={plat.platform as Platform} size="sm" />
+                                {i === 0 && (
+                                  <span className="text-[9px] font-semibold text-vygo-green bg-vygo-green/10 px-1.5 py-0.5 rounded-full">
+                                    Más rentable
+                                  </span>
+                                )}
+                              </div>
+                              <div className="text-right">
+                                <p className="text-sm font-bold text-vygo-white text-money">{formatCurrency(plat.totalEarnings)}</p>
+                                <p className="text-[10px] text-vygo-secondary">${plat.earningsPerKm.toFixed(2)}/km</p>
+                              </div>
                             </div>
-                            <div className="text-right">
-                              <p className="text-sm font-bold text-vygo-white text-money">{formatCurrency(p.totalEarnings)}</p>
-                              <p className="text-[10px] text-vygo-secondary">${p.earningsPerKm.toFixed(2)}/km</p>
+                            <div className="h-1.5 bg-vygo-border rounded-full overflow-hidden">
+                              <div
+                                className="h-full bg-vygo-green rounded-full transition-all duration-700"
+                                style={{ width: `${barWidth}%`, opacity: i === 0 ? 1 : 0.5 }}
+                              />
                             </div>
                           </div>
-                          <div className="h-1.5 bg-vygo-border rounded-full overflow-hidden">
-                            <div
-                              className="h-full bg-vygo-green rounded-full transition-all duration-700"
-                              style={{ width: `${barWidth}%`, opacity: i === 0 ? 1 : 0.5 }}
-                            />
-                          </div>
-                        </div>
-                      )
-                    })}
-                </div>
+                        )
+                      })}
+                  </div>
+                )}
               </div>
             </TabsContent>
           ))}

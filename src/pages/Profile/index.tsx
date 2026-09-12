@@ -24,6 +24,8 @@ export function ProfilePage() {
   const navigate = useNavigate()
   const driver = useDriverStore((s) => s.driver)
   const status = useDriverStore((s) => s.status)
+  const todayEarnings = useDriverStore((s) => s.todayEarnings)
+  const completedOrders = useDriverStore((s) => s.completedOrders)
   const logout = useAuthStore((s) => s.logout)
   const { tryEndShift, confirming, confirmEnd, cancelConfirm, activeOrders } = useEndShift()
   const { connections, loading: loadingPlatforms } = usePlatformConnections()
@@ -39,7 +41,9 @@ export function ProfilePage() {
     {
       icon: Bike,
       label: 'Vehículo',
-      subtitle: `${driver.vehicle.type === 'moto' ? 'Moto' : 'Auto'} · ${driver.vehicle.brand} ${driver.vehicle.model}`,
+      subtitle: driver.vehicle.brand
+        ? `${driver.vehicle.type === 'moto' ? 'Moto' : 'Auto'} · ${driver.vehicle.brand} ${driver.vehicle.model}`
+        : 'Sin configurar',
     },
     {
       icon: Shield,
@@ -78,21 +82,27 @@ export function ProfilePage() {
             <p className="text-sm text-vygo-secondary">Repartidor verificado</p>
           </div>
 
-          {/* Stats */}
+          {/* Stats — only show when data is available */}
           <div className="flex items-center gap-6">
             <div className="text-center">
-              <p className="text-lg font-bold text-vygo-white">{driver.rating}</p>
+              <p className="text-lg font-bold text-vygo-white">
+                {driver.rating > 0 ? driver.rating : '—'}
+              </p>
               <p className="text-xs text-vygo-secondary">Rating</p>
             </div>
             <div className="w-px h-8 bg-vygo-border" />
             <div className="text-center">
-              <p className="text-lg font-bold text-vygo-white">{driver.totalDeliveries.toLocaleString()}</p>
+              <p className="text-lg font-bold text-vygo-white">
+                {completedOrders > 0 ? completedOrders.toLocaleString() : '—'}
+              </p>
               <p className="text-xs text-vygo-secondary">Entregas</p>
             </div>
             <div className="w-px h-8 bg-vygo-border" />
             <div className="text-center">
-              <p className="text-lg font-bold text-vygo-white">{driver.memberSince.split(' ')[1]}</p>
-              <p className="text-xs text-vygo-secondary">Desde {driver.memberSince.split(' ')[0]}</p>
+              <p className="text-lg font-bold text-vygo-white">
+                {todayEarnings > 0 ? `$${todayEarnings}` : '—'}
+              </p>
+              <p className="text-xs text-vygo-secondary">Hoy</p>
             </div>
           </div>
         </div>

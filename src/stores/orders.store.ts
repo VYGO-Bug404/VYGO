@@ -23,7 +23,7 @@ export const useOrdersStore = create<OrdersStore>((set, get) => ({
   activeOrders: ordersService.getActiveOrders(),
   completedOrders: ordersService.getCompletedOrders(),
   pendingOffer: null,
-  currentEarningsPerHour: 192,
+  currentEarningsPerHour: 0,
   _nextRouteNumber: 1,
 
   setPendingOffer: (order) => set({ pendingOffer: order }),
