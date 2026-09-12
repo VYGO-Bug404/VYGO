@@ -34,7 +34,11 @@ EXPIRA_OFERTA_S = 30.0
 
 _TARIFA_BASE_MXN = (28.0, 38.0)
 _TARIFA_BETA_KM_MXN = (7.0, 11.0)
-_PREP_MEDIA_MIN = (6.0, 25.0)
+# Subido el techo de 25 a 35 min (mismo motivo que la intensidad, ver más abajo): más
+# tiempo de preparación es más holgura natural (sigma_i) para que aceptar un segundo
+# pedido cercano "quepa gratis" en la espera del primero -- eso es lo que hace rentable
+# agrupar en el modelo (docs/modelo-matematico.md §1.3).
+_PREP_MEDIA_MIN = (6.0, 35.0)
 _DESTINO_MEDIANA_KM = 3.5
 N_COMPETIDORES_BASE = 25
 
@@ -141,7 +145,10 @@ class GeneradorPedidos:
         mult_clima = self.clima.mult_demanda(clima_actual)
         mult_hora = _perfil_llegada_hora(t)
         intensidad_total = sum(c.intensidad for c in self.comercios)
-        lambda_base_por_unidad_intensidad = 1.0 / 90.0  # ~1 pedido/90s en el comercio promedio
+        # Subido de 1/90s a 1/30s (3x): con 1/90s la prueba de sanidad (ver
+        # reports/HANDOFF.md) daba bundling~0.97 y B2 apenas +9.3% sobre B1 -- muy poca
+        # concurrencia de pedidos visibles a la vez como para que agrupar valga la pena.
+        lambda_base_por_unidad_intensidad = 1.0 / 30.0  # ~1 pedido/30s en el comercio promedio
         lam = intensidad_total * lambda_base_por_unidad_intensidad * mult_hora * mult_clima
         return lam
 

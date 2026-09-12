@@ -199,10 +199,13 @@ def test_held_karp_vs_fuerza_bruta_4_pedidos(n_pedidos, seed):
     )
     tiempo_fb = _fuerza_bruta(stops, 0.0, (0, 0), _travel_fn_lineal, restr)
 
+    # K_A_MAXIMO bajó de 4 a 3 (patch de rendimiento del entorno, ver reports/HANDOFF.md):
+    # 4 pedidos ya toma el camino HEURÍSTICO (DP + perturbación), no la enumeración exacta.
+    # Sigue encontrando el óptimo real en esta instancia (por eso se deja la comparación
+    # contra fuerza bruta), pero ya no está garantizado -- por eso `exacto` es False.
     assert tiempo_hk == pytest.approx(tiempo_fb, abs=1e-6)
-    # <=4 pedidos: camino exacto por enumeración, 8!/(2**4)=2520 secuencias válidas.
-    assert exacto is True
-    assert evaluadas == 2520
+    assert exacto is False
+    assert evaluadas > 0
 
 
 def test_held_karp_espera_estrategica():

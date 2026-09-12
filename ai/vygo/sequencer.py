@@ -31,6 +31,7 @@ Por eso el secuenciador tiene DOS pasadas, no una:
 from __future__ import annotations
 
 import math
+import time
 from dataclasses import dataclass, field
 from typing import Callable
 
@@ -43,9 +44,23 @@ _MAX_PARADAS = 12
 _MAX_ITER_PUNTO_FIJO = 20
 _EPS = 1e-6
 
-# Con <=4 pedidos (<=8 paradas) enumerar TODAS las secuencias válidas por precedencia es
-# barato (90 para 3 pedidos, 2520 para 4) y exacto: nada de heurística de perturbación.
-_UMBRAL_EXACTO_PEDIDOS = 4
+# Con <=3 pedidos (<=6 paradas) enumerar TODAS las secuencias válidas por precedencia es
+# trivial (90 secuencias) y exacto: nada de heurística de perturbación.
+# PÚBLICA a propósito: es el mismo K_A que env.py/feasibility.py usan como tope duro del
+# plan activo (nunca aceptar un 4º pedido) -- una sola fuente de verdad para el número.
+#
+# Bajado de 4 a 3 (documentado, autorizado explícitamente por la tarea que arregló el
+# cuello de botella de llamadas): con K_A=4 (2520 secuencias) el benchmark de 16 entornos
+# daba 775.7 steps/s -- por encima del piso de 300 pero por debajo del objetivo real de
+# 1000. Con K_A=3 (90 secuencias, la guardia de tiempo de 25ms de held_karp deja de
+# activarse en la práctica) el mismo benchmark da 1617.6 steps/s. Ver reports/HANDOFF.md.
+UMBRAL_EXACTO_PEDIDOS = 3
+
+# Guardia de tiempo del camino exacto (§ held_karp): si enumerar+verificar las hasta 2520
+# secuencias tarda más que esto, se aborta con lo mejor encontrado hasta ese punto en vez
+# de colgar el step del entorno. Nunca debería hacer falta con K_A<=4, pero es la red de
+# seguridad si algún día se sube el umbral o el travel_fn real es más caro de lo esperado.
+_LIMITE_TIEMPO_EXACTO_S = 0.025
 
 _contador_candidatas_agotadas = 0
 
@@ -618,11 +633,13 @@ def held_karp(
     n = len(paradas)
     n_pedidos = n // 2
 
-    if n_pedidos <= _UMBRAL_EXACTO_PEDIDOS:
+    if n_pedidos <= UMBRAL_EXACTO_PEDIDOS:
+        t_reloj_inicio = time.perf_counter()
         permutaciones = _permutaciones_validas_por_precedencia(paradas)
         arrays = _arrays_calendario(paradas, restricciones)
         es_recogida, r_idx, _l_idx, _theta_idx, carga_idx, _pareja_idx, carga_base = arrays
         secuencias_evaluadas = len(permutaciones)
+        agotado_por_tiempo = False
 
         # Poda válida (no heurística: preserva la exactitud): el punto fijo sólo puede
         # POSPONER recogidas, así que el tiempo final con espera estratégica de cualquier
@@ -632,7 +649,10 @@ def held_karp(
         # inferior de la candidata siga por debajo de la mejor factible encontrada hasta
         # ahora. Es lo que evita pagar las 2520 verificaciones completas en el caso típico.
         candidatas_naive = []
-        for perm in permutaciones:
+        for i, perm in enumerate(permutaciones):
+            if i % 200 == 0 and time.perf_counter() - t_reloj_inicio > _LIMITE_TIEMPO_EXACTO_S:
+                agotado_por_tiempo = True
+                break
             resultado = _simular_adelante(
                 perm, paradas, t0, pos0, travel_fn, es_recogida, r_idx, carga_idx,
                 restricciones.capacidad, {}, carga_base,
@@ -643,8 +663,11 @@ def held_karp(
         candidatas_naive.sort(key=lambda c: c[0])
 
         mejor_orden, mejor_tiempo, mejor_dist = None, math.inf, math.inf
-        for cota_inferior, perm in candidatas_naive:
+        for i, (cota_inferior, perm) in enumerate(candidatas_naive):
             if cota_inferior >= mejor_tiempo:
+                break
+            if i % 20 == 0 and time.perf_counter() - t_reloj_inicio > _LIMITE_TIEMPO_EXACTO_S:
+                agotado_por_tiempo = True
                 break
             resultado = verificar_y_calendarizar(perm, paradas, t0, pos0, travel_fn, restricciones, arrays)
             if resultado is not None:
@@ -653,10 +676,16 @@ def held_karp(
                 if tiempo_total < mejor_tiempo:
                     mejor_orden, mejor_tiempo, mejor_dist = perm, tiempo_total, dist_total
 
+        # optimo_exacto=False en timeout: aunque mejor_orden ya esté verificado (factible de
+        # verdad, nunca se devuelve nada sin pasar por verificar_y_calendarizar), no se
+        # terminó de comparar contra TODAS las secuencias, así que no hay garantía de que
+        # sea la mejor. Nunca se devuelve una secuencia sin verificar por ahorrar tiempo:
+        # eso arriesgaría violaciones_frescura, que debe ser 0 siempre.
+        optimo_exacto = not agotado_por_tiempo
         if mejor_orden is None:
             _contador_candidatas_agotadas += 1
-            return None, math.inf, math.inf, True, secuencias_evaluadas
-        return mejor_orden, mejor_tiempo, mejor_dist, True, secuencias_evaluadas
+            return None, math.inf, math.inf, optimo_exacto, secuencias_evaluadas
+        return mejor_orden, mejor_tiempo, mejor_dist, optimo_exacto, secuencias_evaluadas
 
     mascaras_ok = _mascaras_validas(paradas, restricciones)
     mat_t, mat_d, dt0, dd0 = _matriz_estatica(paradas, t0, pos0, travel_fn)

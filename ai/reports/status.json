@@ -1,7 +1,7 @@
 {
-  "generado_en": "2026-09-12T12:04:49+00:00",
-  "bloque": "B2-entorno-L0-L1",
-  "commit": "65894b3",
+  "generado_en": "2026-09-12T13:36:29+00:00",
+  "bloque": "B2-insercion-barata-y-decision-por-ronda",
+  "commit": "e6f01a1",
   "dirty": true,
   "entorno": {
     "nivel": null,
@@ -65,9 +65,10 @@
   },
   "diagnostico_automatico": [],
   "bloqueos": [
-    "BLOQUEO PRINCIPAL: la prueba de sanidad B1 vs B2 no se pudo completar de forma concluyente. Causa raíz diagnosticada: el podado por cota inferior de la ruta exacta de held_karp (<=4 pedidos) es efectivo sobre posiciones agrupadas (el benchmark sintético) pero NO sobre pedidos dispersos por todo el grid 20x20 (el muestreo real de comercios de generator.py), donde muchas de las 2520 secuencias válidas quedan casi empatadas y hay que verificarlas casi todas. Con 4-5 pedidos en el plan, el costo por step sube de ~15ms a varios cientos de ms/step y sigue subiendo. Ver reports/HANDOFF.md para el detalle y la traza de diagnóstico.",
+    "BLOQUEO PRINCIPAL: la prueba de sanidad SÍ se completó esta vez (20 escenarios, turno de 2h, entorno ya rápido) y el generador NO pasa el criterio: B2 sólo supera a B1 por +9.3% (umbral 15%) y factor_agrupamiento(B2)=0.97 (umbral 1.4). Un intento de retunear (intensidad de llegada x3, techo de preparación 25->35 min) no mostró mejora clara sobre una muestra más chica (5 escenarios, por presupuesto de tiempo): +3.4%, bundling=0.92. No se investigó más a fondo (p.ej. concentrar geográficamente los comercios, la palanca que falta probar). Conclusión: NO hay evidencia de que el generador produzca oportunidad de agrupamiento suficiente para entrenar todavía. Ver reports/HANDOFF.md.",
+    "En L0 no hay competidores sintéticos (n_competidores_base=0 por diseño), así que p_gana_estimada=1.0 siempre y la comparación B2 vs B2-ingenuo no es significativa en L0 -- hace falta L1 para medirla de verdad.",
     "train_ppo.py, evaluate.py, export_vygo.py siguen siendo stubs sin cuerpo.",
     "baselines B0 (aleatoria) y B3 (MILP rodante) no implementados -- sólo B1/B2/B2-ingenuo (docs/vygo-ai-training.md §6.1); scenarios/test_50.pkl no existe."
   ],
-  "siguiente_paso_sugerido": "Resolver el bloqueo de rendimiento (ver bloqueos) antes de correr la prueba de sanidad B1 vs B2 completa y decidir si el generador produce suficiente oportunidad de agrupamiento para entrenar."
+  "siguiente_paso_sugerido": "Concentrar geográficamente el muestreo de comercios (generator.muestrear_comercios) para crear oportunidad de agrupamiento real, y volver a correr la prueba de sanidad completa antes de considerar entrenamiento."
 }

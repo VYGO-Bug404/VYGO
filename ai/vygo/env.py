@@ -30,7 +30,13 @@ import gymnasium
 import numpy as np
 from gymnasium import spaces
 
-from vygo.feasibility import HOLGURA_MINIMA_REPOSICIONAR_S, K_F, action_mask, holguras_frescura_plan
+from vygo.feasibility import (
+    HOLGURA_MINIMA_REPOSICIONAR_S,
+    K_A_MAXIMO,
+    K_F,
+    action_mask,
+    holguras_frescura_plan,
+)
 from vygo.features import K_A, ConstructorFeatures
 from vygo.generator import DURACION_RONDA_S, EXPIRA_OFERTA_S, GeneradorPedidos, MAX_RONDAS, PedidoGenerado
 from vygo.geo import GridWorld
@@ -58,12 +64,16 @@ class VygoEnv(gymnasium.Env):
 
     metadata: dict[str, Any] = {"render_modes": []}
 
-    def __init__(self, nivel: str = "L1", m_comercios: int = 200, vehiculo: Vehiculo = Vehiculo.MOTO) -> None:
+    def __init__(
+        self, nivel: str = "L1", m_comercios: int = 200, vehiculo: Vehiculo = Vehiculo.MOTO,
+        duracion_turno_s: float = DURACION_TURNO_S,
+    ) -> None:
         if nivel not in ("L0", "L1"):
             raise ValueError("nivel debe ser 'L0' o 'L1'")
         self.nivel = nivel
         self.m_comercios = m_comercios
         self.vehiculo = vehiculo
+        self.duracion_turno_s = duracion_turno_s
         self.action_space = spaces.Discrete(K_F + 2)
         dim = ConstructorFeatures().buffer.shape[0]
         self.observation_space = spaces.Box(low=-100.0, high=100.0, shape=(dim,), dtype=np.float32)
@@ -85,7 +95,6 @@ class VygoEnv(gymnasium.Env):
         self.capacidad = VEHICULOS[self.vehiculo].capacidad
         self.restricciones = Restricciones(capacidad=self.capacidad, r={}, l={}, theta={}, carga={})
         self.plan: list[Parada] = []
-        self._orden_cache: Optional[list[int]] = None
         # Persistente a nivel de env (no por-EstadoRuta): baseline_plan cachea held_karp
         # (plan) dentro de un EstadoRuta, pero _estado_ruta() se llama varias veces por
         # step con un EstadoRuta NUEVO cada vez -- sin este diccionario compartido, el
@@ -133,6 +142,7 @@ class VygoEnv(gymnasium.Env):
         self._avanzar_hasta_decision()
         self._contabilidad_activa = True
 
+        self._refrescar_mascara()
         return self._obs(), self._info()
 
     # ------------------------------------------------------------------ step -----
@@ -141,9 +151,16 @@ class VygoEnv(gymnasium.Env):
         recompensa = self._aplicar_accion(int(action))
         recompensa += self._avanzar_hasta_decision()
 
-        terminado = self.t >= DURACION_TURNO_S
+        terminado = self.t >= self.duracion_turno_s
         truncado = False
+        self._refrescar_mascara()
         return self._obs(), recompensa, terminado, truncado, self._info()
+
+    def _refrescar_mascara(self) -> None:
+        """`action_mask` se calcula UNA vez por step()/reset() (antes se recalculaba una
+        vez para `_obs()` -- que hasta hace poco ni siquiera la usaba, ver más abajo -- y
+        otra para `_info()`); `_obs()` e `_info()` sólo leen `self._ultima_mask`."""
+        self._ultima_mask = action_mask(self._estado_ruta())
 
     # ------------------------------------------------------------------ acción ---
 
@@ -241,13 +258,39 @@ class VygoEnv(gymnasium.Env):
 
     def _aceptar_oferta(self, pid: str) -> float:
         p = self.pedidos[pid]
+        plan_previo = list(self.plan)
+        r_previo, l_previo = dict(self.restricciones.r), dict(self.restricciones.l)
+        theta_previo, carga_previo = dict(self.restricciones.theta), dict(self.restricciones.carga)
+
         self.plan.append(Parada(pid, "recogida", p.origen))
         self.plan.append(Parada(pid, "entrega", p.destino))
         self.restricciones.r[pid] = p.tiempo_listo_en
         self.restricciones.l[pid] = p.fecha_limite
         self.restricciones.theta[pid] = p.theta_frescura
         self.restricciones.carga[pid] = 1
-        self._recalendarizar()
+
+        # TOPE DURO K_A: action_mask ya no ofrece slots factibles con el plan lleno (§
+        # feasibility.K_A_MAXIMO), así que esto nunca debería dispararse -- es la red de
+        # seguridad explícita que pide la tarea, no la única línea de defensa.
+        assert len(self.plan) // 2 <= K_A_MAXIMO, (
+            f"plan activo con {len(self.plan) // 2} pedidos, excede K_A_MAXIMO={K_A_MAXIMO}"
+        )
+
+        if not self._recalendarizar():
+            # La guardia de tiempo de held_karp (25ms) puede impedir confirmar un horario
+            # exacto para el plan con el pedido nuevo, aunque la inserción barata (más
+            # optimista: sólo prueba insertar en el orden ya fijo) haya dicho que sí cabía.
+            # Revertir aquí es obligatorio: sin esto, el plan queda con paradas pero sin
+            # horario (`_salidas_cache=None`), `_proximo_evento_nodo` deja de encontrar
+            # eventos de nodo, y el vehículo se congela para el resto del episodio (bug
+            # real encontrado al medir este bloque, ver reports/HANDOFF.md).
+            self.plan = plan_previo
+            self.restricciones.r, self.restricciones.l = r_previo, l_previo
+            self.restricciones.theta, self.restricciones.carga = theta_previo, carga_previo
+            self._recalendarizar()  # el plan previo ya era factible; no debería volver a fallar
+            self.estado_pedido[pid] = "perdido"
+            self.contadores["perdidos"] += 1
+            return 0.0
 
         distancia_estim = abs(self.pos[0] - p.origen[0]) + abs(self.pos[1] - p.origen[1])
         self._p_gana_muestras.append(
@@ -276,46 +319,61 @@ class VygoEnv(gymnasium.Env):
         heapq.heappush(self._eventos, (t, self._contador_eventos, tipo, pid))
 
     def _agendar_siguiente_pedido(self) -> None:
-        if self.t >= DURACION_TURNO_S:
+        if self.t >= self.duracion_turno_s:
             return
         t_llegada, pedido = self.generador.siguiente_pedido(self.t)
         self.pedidos[pedido.id] = pedido
         self.contadores["generados"] += 1
         self._agendar(t_llegada, "pedido", pedido.id)
 
-    def _recalendarizar(self) -> None:
+    def _recalendarizar(self) -> bool:
+        """Reoptimización EXACTA completa (held_karp, camino exacto porque el plan nunca
+        pasa de K_A_MAXIMO pedidos) -- se corre UNA sola vez por cambio de plan (aceptar,
+        revertir tras perder, entregar/recoger), nunca por cada oferta evaluada (eso lo
+        hace `insertion.mejor_insercion`, barato). Deja `self.plan` REORDENADO según el
+        óptimo encontrado: de ahí en adelante el plan siempre está en su orden vigente, y
+        tanto la inserción barata como el evento de nodo pueden asumirlo (parada 0 = la
+        próxima) sin volver a preguntarle a held_karp.
+
+        Devuelve False si no pudo confirmar un horario (held_karp topó con su guardia de
+        tiempo de 25ms, o el plan es genuinamente infactible). El llamador es responsable
+        de reaccionar -- normalmente revirtiendo el cambio que se acaba de hacer (ver
+        `_aceptar_oferta`): dejar `self.plan` con paradas pero sin horario congela el
+        vehículo para siempre (`_proximo_evento_nodo` nunca vuelve a encontrar un evento)."""
+
         # Invalidar SIEMPRE primero: si algo falla abajo, `_proximo_evento_nodo` debe ver
         # que no hay horario válido (None) en vez de reusar uno viejo que ya no corresponde
         # al `self.plan` actual -- un horario viejo puede apuntar a una parada ya visitada
         # y cuyo tiempo no avanza, lo que cuelga el loop de eventos en un ciclo sin fin.
-        self._orden_cache = None
         self._llegadas_cache = None
         self._salidas_cache = None
 
         if not self.plan:
-            self._orden_cache = []
-            return
+            return True
         stops = [{"id": p.id, "tipo": p.tipo, "pos": p.pos} for p in self.plan]
         orden, _tiempo, _dist, _exacto, _eval = held_karp(
             stops, self.t, self.pos, self._travel_fn, self.restricciones,
         )
         if orden is None:
-            # No debería pasar: action_mask ya validó la inserción. Defensivo: sin horario.
-            return
-        resultado = verificar_y_calendarizar(orden, self.plan, self.t, self.pos, self._travel_fn, self.restricciones)
+            return False
+        self.plan = [self.plan[i] for i in orden]
+        resultado = verificar_y_calendarizar(
+            list(range(len(self.plan))), self.plan, self.t, self.pos, self._travel_fn, self.restricciones,
+        )
         if resultado is None:
-            return
-        self._orden_cache = orden
+            return False
         self._llegadas_cache, self._salidas_cache, _dist_total = resultado
+        return True
 
-    def _proximo_evento_nodo(self) -> Optional[tuple[float, int]]:
+    def _proximo_evento_nodo(self) -> Optional[float]:
         """Instante en que el vehículo queda libre para la siguiente parada: es la SALIDA
         de la próxima parada del plan, no la llegada -- en una recogida, salida ya incluye
         la espera obligatoria por preparación (max(llegada, r_i)); usar llegada saltaría esa
-        espera."""
-        if not self.plan or not self._orden_cache or self._salidas_cache is None:
+        espera. `self.plan` siempre está en su orden vigente (`_recalendarizar` lo deja
+        así), así que la próxima parada es siempre el índice 0."""
+        if not self.plan or self._salidas_cache is None:
             return None
-        return self._salidas_cache[0], self._orden_cache[0]
+        return self._salidas_cache[0]
 
     def _avanzar_hasta_decision(self) -> float:
         """Procesa eventos hasta que quede al menos un slot para mostrar una oferta nueva,
@@ -325,29 +383,32 @@ class VygoEnv(gymnasium.Env):
         t_inicio = self.t
         recompensa = 0.0
         iteraciones = 0
-        while self.t < DURACION_TURNO_S:
+        while self.t < self.duracion_turno_s:
             iteraciones += 1
             if iteraciones > 10_000:
                 # Red de seguridad: no debería hacer falta (cada evento procesado o bien
                 # avanza self.t o bien libera un slot y sale del loop), pero un bug futuro
                 # aquí sería un cuelgue silencioso en vez de un error visible.
-                self.t = DURACION_TURNO_S
+                self.t = self.duracion_turno_s
                 break
             t_nodo = self._proximo_evento_nodo()
-            proximo_evento_es_nodo = t_nodo is not None and (not self._eventos or t_nodo[0] <= self._eventos[0][0])
+            proximo_evento_es_nodo = t_nodo is not None and (not self._eventos or t_nodo <= self._eventos[0][0])
 
             if proximo_evento_es_nodo:
-                recompensa += self._procesar_llegada_nodo(*t_nodo)
+                # Las llegadas a nodo (recogida/entrega física) nunca son punto de
+                # decisión: son física del plan ya comprometido, no algo que el agente
+                # decida. Se procesan y se sigue de largo dentro del mismo step().
+                recompensa += self._procesar_llegada_nodo(t_nodo)
                 continue
 
             if not self._eventos:
-                self.t = DURACION_TURNO_S
+                self.t = self.duracion_turno_s
                 break
 
             t_evt, _seq, tipo, pid = heapq.heappop(self._eventos)
-            if t_evt > DURACION_TURNO_S:
+            if t_evt > self.duracion_turno_s:
                 heapq.heappush(self._eventos, (t_evt, _seq, tipo, pid))
-                self.t = DURACION_TURNO_S
+                self.t = self.duracion_turno_s
                 break
 
             dt = t_evt - self.t
@@ -368,17 +429,18 @@ class VygoEnv(gymnasium.Env):
             if any(s is None for s in self.slots) and self.cola_pendientes:
                 self._liberar_slot_pendiente()
 
-            if self._hay_decision_disponible():
+            # UNA decisión por cierre de ronda, no por oferta: las llegadas de pedido y las
+            # expiraciones se procesan en el mismo step() sin devolver el control al
+            # agente -- llegan mucho más seguido que los cierres de ronda (45s) y antes
+            # generaban una época de decisión cada una, por eso la primera entrega caía
+            # hasta el paso ~1500 de un turno. Sólo "cierra_ronda" (cuando de verdad puede
+            # haber algo nuevo que decidir: se liberó un slot, se resolvió un pedido) para
+            # el loop y le devuelve el turno al agente.
+            if tipo == "cierra_ronda":
                 break
 
         self._actualizar_rho_hat(recompensa, self.t - t_inicio)
         return recompensa
-
-    def _hay_decision_disponible(self) -> bool:
-        # Siempre hay una "decisión" disponible (aunque sea rechazar_todas / no-op); el
-        # loop de arriba sólo necesita salir tras procesar UN evento por llamada a step()
-        # para que step() avance "al siguiente evento, no a un tick fijo".
-        return True
 
     def _procesar_llegada_pedido(self, pid: str) -> float:
         self.estado_pedido[pid] = "buscando"
@@ -482,8 +544,8 @@ class VygoEnv(gymnasium.Env):
         self.restricciones.carga.pop(pid, None)
         self._recalendarizar()
 
-    def _procesar_llegada_nodo(self, t_salida: float, idx_parada: int) -> float:
-        parada = self.plan[idx_parada]
+    def _procesar_llegada_nodo(self, t_salida: float) -> float:
+        parada = self.plan[0]
         p = self.pedidos[parada.id]
         dt = t_salida - self.t
         if dt > 0:
@@ -528,10 +590,7 @@ class VygoEnv(gymnasium.Env):
             self.estado_pedido[parada.id] = "entregado"
             self.contadores["entregados"] += 1
 
-        # `idx_parada` es un índice en self.plan; al hacer pop() los índices cacheados en
-        # _orden_cache quedarían desalineados, así que se reconstruye desde cero (barato:
-        # <=12 paradas) en vez de intentar mantener los índices consistentes a mano.
-        self.plan = [pp for i, pp in enumerate(self.plan) if i != idx_parada]
+        self.plan = self.plan[1:]
         if parada.tipo == "entrega":
             for k in ("r", "l", "theta", "carga"):
                 getattr(self.restricciones, k).pop(parada.id, None)
@@ -558,8 +617,8 @@ class VygoEnv(gymnasium.Env):
             "x_norm": self.pos[0] / max(self.grid.n - 1, 1),
             "y_norm": self.pos[1] / max(self.grid.n - 1, 1),
             "carga_frac": self._carga_a_bordo() / max(self.capacidad, 1),
-            "t_transcurrido_norm": self.t / DURACION_TURNO_S,
-            "t_restante_norm": max(0.0, DURACION_TURNO_S - self.t) / DURACION_TURNO_S,
+            "t_transcurrido_norm": self.t / self.duracion_turno_s,
+            "t_restante_norm": max(0.0, self.duracion_turno_s - self.t) / self.duracion_turno_s,
             "rho_hat_norm": self.rho_hat / 200.0,
             "ganancia_acum_norm": self.ganancia_acum / 1000.0,
             "km_acum_norm": self.km_acum / 100.0,
@@ -591,7 +650,7 @@ class VygoEnv(gymnasium.Env):
                 break
 
         ofertas_items: list[Optional[dict]] = []
-        for pid in self.slots:
+        for i, pid in enumerate(self.slots):
             if pid is None:
                 ofertas_items.append(None)
                 continue
@@ -619,7 +678,7 @@ class VygoEnv(gymnasium.Env):
                 "p_gana_estimada": p_gana,
                 "r_menos_t_norm": (p.tiempo_listo_en - self.t) / 600.0,
                 "segundos_para_expirar_norm": max(0.0, self.slot_mostrado_en[pid] + EXPIRA_OFERTA_S - self.t) / EXPIRA_OFERTA_S,
-                "factible": 1.0,
+                "factible": float(self._ultima_mask[i]),
             })
 
         return self._constructor.construir(propio, plan_items, ofertas_items).copy()
@@ -655,7 +714,7 @@ class VygoEnv(gymnasium.Env):
                 "penalizaciones": self.penalizaciones_acum,
                 "costo_tiempo": self.costo_tiempo_acum,
             },
-            "action_mask": action_mask(self._estado_ruta()),
+            "action_mask": self._ultima_mask,
             "pedidos_h": pedidos_h,
         }
 
