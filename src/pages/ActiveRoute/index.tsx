@@ -67,6 +67,25 @@ export function ActiveRoutePage() {
         showFullRoute
       />
 
+      {/* LEYENDA — debajo del banner, esquina izquierda */}
+      {activeOrders.length > 0 && (
+        <div
+          className="absolute left-3 z-20 pointer-events-none"
+          style={{ top: `calc(max(env(safe-area-inset-top, 0px), 12px) + 76px)` }}
+        >
+          <div className="bg-black/60 backdrop-blur-sm rounded-xl px-2.5 py-2 border border-vygo-border flex flex-col gap-1.5">
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 rounded-full bg-vygo-card border-2 border-vygo-green flex-shrink-0" />
+              <span className="text-[11px] text-vygo-secondary">Recoger</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 rounded-full bg-vygo-warning flex-shrink-0" />
+              <span className="text-[11px] text-vygo-secondary">Entregar</span>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* TOP BANNER — floats over map */}
       <div
         className="absolute left-3 right-3 z-20"
