@@ -1,26 +1,20 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Phone, Mail, Lock, Eye, EyeOff, ArrowLeft, Loader2 } from 'lucide-react'
+import { Mail, Lock, Eye, EyeOff, ArrowLeft, Loader2 } from 'lucide-react'
 import { useAuthStore } from '@/stores/auth.store'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 
-type Step = 'main' | 'phone_number' | 'phone_otp' | 'email'
+type Step = 'main' | 'email'
 
 export function LoginPage() {
   const navigate = useNavigate()
-  const { signInWithApple, signInWithGoogle, signInWithPhone, verifyPhoneOtp, login } =
-    useAuthStore()
+  const { signInWithApple, signInWithGoogle, login } = useAuthStore()
 
   const [step, setStep] = useState<Step>('main')
   const [loading, setLoading] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
 
-  // Phone OTP state
-  const [phone, setPhone] = useState('')
-  const [otp, setOtp] = useState('')
-
-  // Email state
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPwd, setShowPwd] = useState(false)
@@ -37,10 +31,6 @@ export function LoginPage() {
       setErrorMsg(
         msg.includes('Invalid login')
           ? 'Correo o contraseña incorrectos'
-          : msg.includes('Phone')
-          ? 'Número de teléfono inválido'
-          : msg.includes('Token has expired') || msg.includes('invalid')
-          ? 'Código incorrecto o expirado'
           : msg
       )
     } finally {
@@ -48,29 +38,8 @@ export function LoginPage() {
     }
   }
 
-  const handleApple = () =>
-    withLoader(async () => {
-      await signInWithApple()
-    })
-
-  const handleGoogle = () =>
-    withLoader(async () => {
-      await signInWithGoogle()
-    })
-
-  const handleSendOtp = () =>
-    withLoader(async () => {
-      const normalized = phone.startsWith('+') ? phone : `+52${phone.replace(/\D/g, '')}`
-      await signInWithPhone(normalized)
-      setStep('phone_otp')
-    })
-
-  const handleVerifyOtp = () =>
-    withLoader(async () => {
-      const normalized = phone.startsWith('+') ? phone : `+52${phone.replace(/\D/g, '')}`
-      await verifyPhoneOtp(normalized, otp)
-      navigate('/', { replace: true })
-    })
+  const handleApple = () => withLoader(() => signInWithApple())
+  const handleGoogle = () => withLoader(() => signInWithGoogle())
 
   const handleEmailLogin = () =>
     withLoader(async () => {
@@ -102,7 +71,6 @@ export function LoginPage() {
           {errorMsg && <ErrorBanner msg={errorMsg} onClose={clearError} />}
 
           <div className="flex flex-col gap-3">
-            {/* Apple */}
             <SocialButton
               onClick={handleApple}
               loading={loading}
@@ -110,8 +78,6 @@ export function LoginPage() {
               label="Continuar con Apple"
               className="bg-white text-black hover:bg-gray-100"
             />
-
-            {/* Google */}
             <SocialButton
               onClick={handleGoogle}
               loading={loading}
@@ -119,18 +85,8 @@ export function LoginPage() {
               label="Continuar con Google"
               className="bg-vygo-card border border-vygo-border text-vygo-white hover:bg-vygo-card-2"
             />
-
-            {/* Phone */}
-            <SocialButton
-              onClick={() => { clearError(); setStep('phone_number') }}
-              loading={false}
-              icon={<Phone size={18} />}
-              label="Continuar con teléfono"
-              className="bg-vygo-card border border-vygo-border text-vygo-white hover:bg-vygo-card-2"
-            />
           </div>
 
-          {/* Divider */}
           <div className="flex items-center gap-3 my-6">
             <div className="flex-1 h-px bg-vygo-border" />
             <span className="text-xs text-vygo-secondary">o usa tu correo</span>
@@ -159,89 +115,6 @@ export function LoginPage() {
         </>
       )}
 
-      {/* ── STEP: phone number ── */}
-      {step === 'phone_number' && (
-        <>
-          <BackButton onClick={() => { clearError(); setStep('main') }} />
-          <div className="mb-7">
-            <h1 className="text-2xl font-bold text-vygo-white mb-1">Tu número</h1>
-            <p className="text-sm text-vygo-secondary">Te enviaremos un código por SMS</p>
-          </div>
-
-          {errorMsg && <ErrorBanner msg={errorMsg} onClose={clearError} />}
-
-          <div className="flex flex-col gap-4">
-            <div className="flex gap-2">
-              <div className="flex items-center px-3 bg-vygo-card border border-vygo-border rounded-2xl text-vygo-secondary text-sm font-medium flex-shrink-0">
-                🇲🇽 +52
-              </div>
-              <input
-                type="tel"
-                inputMode="numeric"
-                placeholder="55 1234 5678"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value.replace(/\D/g, ''))}
-                className="flex-1 bg-vygo-card border border-vygo-border rounded-2xl px-4 py-3.5 text-sm text-vygo-white placeholder:text-vygo-secondary/50 focus:outline-none focus:border-vygo-green/50"
-                maxLength={10}
-              />
-            </div>
-
-            <Button
-              onClick={handleSendOtp}
-              disabled={loading || phone.replace(/\D/g, '').length < 10}
-              size="xl"
-              className="w-full h-14 text-base font-semibold"
-            >
-              {loading ? <Loader2 size={18} className="animate-spin" /> : 'Enviar código'}
-            </Button>
-          </div>
-        </>
-      )}
-
-      {/* ── STEP: phone OTP ── */}
-      {step === 'phone_otp' && (
-        <>
-          <BackButton onClick={() => { clearError(); setStep('phone_number') }} />
-          <div className="mb-7">
-            <h1 className="text-2xl font-bold text-vygo-white mb-1">Ingresa el código</h1>
-            <p className="text-sm text-vygo-secondary">
-              Enviamos un SMS al {phone}
-            </p>
-          </div>
-
-          {errorMsg && <ErrorBanner msg={errorMsg} onClose={clearError} />}
-
-          <div className="flex flex-col gap-4">
-            <input
-              type="text"
-              inputMode="numeric"
-              placeholder="000000"
-              value={otp}
-              onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
-              className="w-full bg-vygo-card border border-vygo-border rounded-2xl px-4 py-4 text-center text-2xl font-bold tracking-[0.5em] text-vygo-white placeholder:text-vygo-secondary/30 focus:outline-none focus:border-vygo-green/50"
-              maxLength={6}
-            />
-
-            <Button
-              onClick={handleVerifyOtp}
-              disabled={loading || otp.length < 6}
-              size="xl"
-              className="w-full h-14 text-base font-semibold"
-            >
-              {loading ? <Loader2 size={18} className="animate-spin" /> : 'Verificar'}
-            </Button>
-
-            <button
-              onClick={handleSendOtp}
-              disabled={loading}
-              className="text-sm text-vygo-secondary hover:text-vygo-white transition-colors text-center"
-            >
-              ¿No llegó? Reenviar código
-            </button>
-          </div>
-        </>
-      )}
-
       {/* ── STEP: email ── */}
       {step === 'email' && (
         <>
@@ -264,7 +137,6 @@ export function LoginPage() {
               autoComplete="email"
               inputMode="email"
             />
-
             <Input
               label="Contraseña"
               type={showPwd ? 'text' : 'password'}
@@ -279,7 +151,6 @@ export function LoginPage() {
               }
               autoComplete="current-password"
             />
-
             <Button
               onClick={handleEmailLogin}
               disabled={loading || !email || !password}
@@ -299,8 +170,6 @@ export function LoginPage() {
   )
 }
 
-// ── Sub-components ──
-
 function BackButton({ onClick }: { onClick: () => void }) {
   return (
     <button
@@ -317,42 +186,36 @@ function ErrorBanner({ msg, onClose }: { msg: string; onClose: () => void }) {
     <div className="bg-vygo-danger/10 border border-vygo-danger/30 rounded-2xl px-4 py-3 mb-4 flex items-start justify-between gap-2">
       <p className="text-sm text-vygo-danger flex-1">{msg}</p>
       <button onClick={onClose} className="text-vygo-danger/60 hover:text-vygo-danger mt-0.5">
-        <X size={14} />
+        <XIcon />
       </button>
     </div>
   )
 }
 
 function SocialButton({
-  onClick, loading, icon, label, className, badge,
+  onClick, loading, icon, label, className,
 }: {
   onClick: () => void
   loading: boolean
   icon: React.ReactNode
   label: string
   className: string
-  badge?: string
 }) {
   return (
     <button
       onClick={onClick}
       disabled={loading}
-      className={`relative flex items-center justify-center gap-3 w-full h-14 rounded-2xl text-[15px] font-semibold transition-all duration-200 disabled:opacity-60 ${className}`}
+      className={`flex items-center justify-center gap-3 w-full h-14 rounded-2xl text-[15px] font-semibold transition-all duration-200 disabled:opacity-60 ${className}`}
     >
       <span className="w-5 h-5 flex items-center justify-center flex-shrink-0">{icon}</span>
       {label}
-      {badge && (
-        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[9px] font-bold uppercase tracking-wide bg-black/20 text-current opacity-60 rounded-full px-2 py-0.5">
-          {badge}
-        </span>
-      )}
     </button>
   )
 }
 
 function VygoLogo() {
   return (
-    <div className="flex items-center gap-0">
+    <div className="flex items-center">
       <span className="text-[42px] font-black tracking-[-2px] text-vygo-white leading-none select-none">VY</span>
       <span className="text-[42px] font-black tracking-[-2px] text-vygo-green leading-none select-none">GO</span>
     </div>
@@ -378,10 +241,9 @@ function GoogleLogo() {
   )
 }
 
-// X icon inline (not imported to avoid re-adding lucide import for a single use)
-function X({ size = 14 }: { size?: number }) {
+function XIcon() {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
       <path d="M18 6 6 18M6 6l12 12"/>
     </svg>
   )
