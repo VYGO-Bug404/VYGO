@@ -11,6 +11,8 @@ import {
 import { useNavigate } from 'react-router-dom'
 import { useDriverStore } from '@/stores/driver.store'
 import { useAuthStore } from '@/stores/auth.store'
+import { useEndShift } from '@/hooks/useEndShift'
+import { EndShiftConfirm } from '@/components/EndShiftConfirm'
 import { PlatformBadge } from '@/components/PlatformBadge'
 import { PageHeader } from '@/components/layout/PageHeader'
 import type { Platform } from '@/types/order'
@@ -18,12 +20,11 @@ import type { Platform } from '@/types/order'
 export function ProfilePage() {
   const navigate = useNavigate()
   const driver = useDriverStore((s) => s.driver)
-  const endShift = useDriverStore((s) => s.endShift)
   const status = useDriverStore((s) => s.status)
   const logout = useAuthStore((s) => s.logout)
+  const { tryEndShift, confirming, confirmEnd, cancelConfirm, activeOrders } = useEndShift()
 
   const handleLogout = async () => {
-    endShift()
     await logout()
     navigate('/login', { replace: true })
   }
@@ -113,7 +114,7 @@ export function ProfilePage() {
         {/* Logout */}
         {status !== 'offline' && (
           <button
-            onClick={endShift}
+            onClick={tryEndShift}
             className="flex items-center justify-center gap-2 w-full h-12 rounded-2xl border border-vygo-danger/30 bg-vygo-danger/5 text-vygo-danger text-sm font-semibold hover:bg-vygo-danger/10 transition-colors"
           >
             <LogOut size={16} />
@@ -134,6 +135,14 @@ export function ProfilePage() {
           VYGO v0.1.0 · Muévete mejor. Gana más.
         </p>
       </div>
+
+      {confirming && (
+        <EndShiftConfirm
+          activeCount={activeOrders.length}
+          onConfirm={confirmEnd}
+          onCancel={cancelConfirm}
+        />
+      )}
     </div>
   )
 }

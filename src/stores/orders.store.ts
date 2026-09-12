@@ -10,6 +10,7 @@ interface OrdersStore {
   _nextRouteNumber: number
 
   acceptOffer: (order: Order) => void
+  resetShift: () => void
   rejectOffer: () => void
   setPendingOffer: (order: Order) => void
   updateOrderStatus: (id: string, status: OrderStatus) => void
@@ -80,6 +81,13 @@ export const useOrdersStore = create<OrdersStore>((set, get) => ({
       get().updateOrderStatus(id, next)
     }
   },
+
+  resetShift: () =>
+    set({
+      activeOrders: [],
+      pendingOffer: null,
+      _nextRouteNumber: 1,
+    }),
 
   simulateNewOrder: () => {
     const offer = ordersService.generateNewOffer()

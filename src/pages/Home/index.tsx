@@ -2,6 +2,8 @@ import { Bell, ChevronRight, StopCircle, TrendingUp, Zap } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { useDriverStore } from '@/stores/driver.store'
 import { useOrdersStore } from '@/stores/orders.store'
+import { useEndShift } from '@/hooks/useEndShift'
+import { EndShiftConfirm } from '@/components/EndShiftConfirm'
 import { DriverStatusBadge } from '@/components/DriverStatusBadge'
 import { MockMap } from '@/components/maps/MockMap'
 import { PlatformBadge } from '@/components/PlatformBadge'
@@ -15,8 +17,8 @@ export function HomePage() {
   const earningsPerHour = useDriverStore((s) => s.earningsPerHour)
   const completedOrders = useDriverStore((s) => s.completedOrders)
   const startShift = useDriverStore((s) => s.startShift)
-  const endShift = useDriverStore((s) => s.endShift)
   const activeOrders = useOrdersStore((s) => s.activeOrders)
+  const { tryEndShift, confirming, confirmEnd, cancelConfirm } = useEndShift()
 
   const isOnline = driverStatus !== 'offline'
   const nextOrder = activeOrders[0] ?? null
@@ -189,7 +191,7 @@ export function HomePage() {
         {/* ── Terminar jornada ── */}
         {isOnline && (
           <button
-            onClick={endShift}
+            onClick={tryEndShift}
             className="flex items-center justify-center gap-2 w-full h-10 rounded-2xl text-vygo-secondary/60 text-sm hover:text-vygo-danger transition-colors"
           >
             <StopCircle size={14} />
@@ -197,6 +199,14 @@ export function HomePage() {
           </button>
         )}
       </div>
+
+      {confirming && (
+        <EndShiftConfirm
+          activeCount={activeOrders.length}
+          onConfirm={confirmEnd}
+          onCancel={cancelConfirm}
+        />
+      )}
     </div>
   )
 }

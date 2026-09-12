@@ -2,8 +2,9 @@ import { useNavigate } from 'react-router-dom'
 import { ArrowLeft, ChevronRight, LogOut } from 'lucide-react'
 import { useOrdersStore } from '@/stores/orders.store'
 import { useRouteStore } from '@/stores/route.store'
-import { useDriverStore } from '@/stores/driver.store'
 import { useActiveRoute } from '@/hooks/useActiveRoute'
+import { useEndShift } from '@/hooks/useEndShift'
+import { EndShiftConfirm } from '@/components/EndShiftConfirm'
 import { MockMap } from '@/components/maps/MockMap'
 import { PlatformBadge } from '@/components/PlatformBadge'
 import { Button } from '@/components/ui/button'
@@ -24,7 +25,7 @@ export function ActiveRoutePage() {
   const { currentStop, nextStop, totalStops } = useActiveRoute()
   const currentStopIndex = useRouteStore((s) => s.currentStopIndex)
 
-  const endShift = useDriverStore((s) => s.endShift)
+  const { tryEndShift, confirming, confirmEnd, cancelConfirm } = useEndShift()
   const primaryOrder = currentStop?.order ?? activeOrders[0] ?? null
   const nextOrder = nextStop?.order ?? activeOrders[1] ?? null
 
@@ -178,7 +179,7 @@ export function ActiveRoutePage() {
 
             {/* Terminar jornada */}
             <button
-              onClick={() => { endShift(); navigate('/') }}
+              onClick={() => tryEndShift()}
               className="flex items-center justify-center gap-1.5 w-full py-2 rounded-xl border border-vygo-danger/25 bg-vygo-danger/5 text-vygo-danger text-xs font-medium hover:bg-vygo-danger/10 transition-colors"
             >
               <LogOut size={12} />
@@ -188,6 +189,13 @@ export function ActiveRoutePage() {
         </div>
       </div>
 
+      {confirming && (
+        <EndShiftConfirm
+          activeCount={activeOrders.length}
+          onConfirm={() => { confirmEnd(); navigate('/') }}
+          onCancel={cancelConfirm}
+        />
+      )}
     </div>
   )
 }
