@@ -1,7 +1,7 @@
 {
-  "generado_en": "2026-09-12T14:29:06+00:00",
-  "bloque": "B3-diagnostico-agrupamiento-y-clusters",
-  "commit": "721432c",
+  "generado_en": "2026-09-12T16:39:07+00:00",
+  "bloque": "B4-separacion-ka-economia-y-agente-entrenado",
+  "commit": "5bbcb88",
   "dirty": true,
   "entorno": {
     "nivel": null,
@@ -9,7 +9,7 @@
     "steps_por_segundo": null
   },
   "tests": {
-    "pasaron": 11,
+    "pasaron": 12,
     "fallaron": 0,
     "xfail": 0,
     "detalle_fallos": []
@@ -27,22 +27,22 @@
       "estado": "no_implementado"
     },
     "B1": {
-      "rho": 227.11,
-      "pedidos_h": 4.98,
+      "rho": 345.97,
+      "pedidos_h": 7.3,
       "puntualidad": 1.0,
-      "bundling": 0.68
+      "bundling": 0.88
     },
     "B2": {
-      "rho": 267.45,
-      "pedidos_h": 5.4,
+      "rho": 338.39,
+      "pedidos_h": 7.28,
       "puntualidad": 1.0,
-      "bundling": 0.73
+      "bundling": 0.89
     },
     "B2_ingenuo": {
-      "rho": 267.45,
-      "pedidos_h": 5.4,
+      "rho": 334.63,
+      "pedidos_h": 7.18,
       "puntualidad": 1.0,
-      "bundling": 0.74
+      "bundling": 0.89
     },
     "B3": {
       "rho": 0,
@@ -50,21 +50,28 @@
     }
   },
   "entrenamiento": {
-    "activo": false,
-    "algoritmo": null,
-    "semillas": [],
-    "pasos_totales": 0,
-    "pasos_objetivo": null,
-    "eta_minutos": null,
-    "curva": [],
-    "mejor_rho_val": null,
+    "activo": true,
+    "algoritmo": "MaskablePPO (bc_policy.pt como inicialización)",
+    "semillas": [
+      0
+    ],
+    "pasos_totales": 25008,
+    "pasos_objetivo": 1075000,
+    "eta_minutos": 469.3787564172043,
+    "curva": [
+      {
+        "paso": 25008,
+        "rho_val": 0.0
+      }
+    ],
+    "mejor_rho_val": 0.0,
     "etapa_curriculum": null
   },
   "evaluacion": {
-    "escenarios": null,
-    "pareada": null,
+    "escenarios": 10,
+    "pareada": false,
     "agente": {
-      "rho_mediana": null,
+      "rho_mediana": 0.0,
       "iqr": [
         null,
         null
@@ -75,12 +82,16 @@
   },
   "diagnostico_automatico": [],
   "bloqueos": [
-    "BLOQUEO PRINCIPAL (persiste, causa distinta a la que se sospechaba): el histograma de motivos de rechazo (5 y luego 20 escenarios, B2, ver HANDOFF) muestra que ~96-99.7% de las ofertas evaluadas con plan activo no se rechazan por capacidad del vehículo, frescura, fecha límite, prefiltro ni umbral_rho -- se rechazan porque el plan YA está en el tope duro K_A_MAXIMO=3 (`sequencer.UMBRAL_EXACTO_PEDIDOS`, bajado de 4 a 3 en el bloque anterior por presupuesto de steps/s). Ninguno de los 4 candidatos de la tarea (Q de vehículo, theta de frescura, N_PREFILTRO, fórmula de tarifa) domina el histograma (todos <3% combinados) así que, por la regla de la propia tarea ('arregla sólo lo que el histograma señale'), NO se tocó ninguno de los 4. Subir K_A_MAXIMO SÍ atacaría la causa real pero es un cambio de presupuesto de rendimiento (vuelve a 2520 secuencias exactas por reoptimización), no uno de los candidatos autorizados hoy -- queda documentado como decisión pendiente, no aplicado unilateralmente.",
-    "Clústeres geográficos de comercios aplicados (generator.muestrear_comercios: 4 zonas x 15 comercios en disco de 1.5km + 20 dispersos; destinos a <2.5km del origen). Resultado tras 20 escenarios x 2h: B2 vs B1 +17.8% (SÍ supera el umbral de 15%, antes +9.3%), pero factor_agrupamiento(B2)=0.73 (bajó de 0.97, sigue muy por debajo del umbral 1.4 -- y ahora por debajo de 1.0, no cerca). Por la propia regla de la tarea ('si se queda cerca de 1.0, seguimos igual: el valor del agente está en la selección'): NO se sigue tocando el generador. +17.8% sobre B1 es el resultado presentable de este bloque.",
-    "rho_hat observado (227-275 MXN/h) sigue por encima del rango 120-180 MXN/h que la tarea esperaba de la fórmula de tarifa (base 28-38 + beta 7-11/km). No se investigó la fórmula porque 'umbral_rho' es <0.02% del histograma de rechazos (no está gateando decisiones) -- posible instrumento de medición mal calibrado más que un bug de conversión, pendiente para un bloque futuro si importa.",
-    "En L0 no hay competidores sintéticos (n_competidores_base=0 por diseño), así que p_gana_estimada=1.0 siempre; B2 vs B2-ingenuo dio +0.0% en esta corrida -- consistente con L0, no una regresión. Hace falta L1 para medir el valor real de p_gana.",
-    "train_ppo.py, evaluate.py, export_vygo.py siguen siendo stubs sin cuerpo.",
+    "K_A_MAXIMO (feasibility.py, tope de PEDIDOS en el plan) se DESACOPLÓ de sequencer.UMBRAL_EXACTO_PEDIDOS (hasta cuántos pedidos held_karp resuelve exacto) -- estaban fusionadas en 3, así que bajar el umbral exacto por steps/s le bajaba la capacidad al repartidor de regalo. Ahora UMBRAL_EXACTO_PEDIDOS=3 (sin cambio, decisión de algoritmo) y K_A_MAXIMO=4 (decisión del problema); el 4º pedido del plan se calendariza por el camino heurístico, no el exacto. De paso se corrigió un bug real: el conteo de pedidos en el plan usaba `len(plan)//2` (paradas/2), que SUBcuenta en cuanto una recogida ya se procesó (esa parada sale del plan, sólo queda la entrega) -- ahora cuenta IDs de pedido distintos (`sequencer.n_pedidos_en_plan`) en feasibility.py, baselines.py y el assert de env.py. Test nuevo: test_k_a_maximo_desacoplado_de_umbral_exacto_permite_cuarto_pedido.",
+    "Auditoría de economía: se imprimió el desglose completo de un turno (ingreso bruto, costo por km, horas conectadas) y NO se encontró bug de conversión -- el costo por km sí se resta, las horas sí son horas (t/3600 en todos los sitios), la tarifa no se suma dos veces (ganancia_acum y el reward por step son acumuladores separados, cada uno incrementado una sola vez por entrega). rho salía alto porque la tarifa por km era generosa, no por unidades mal aplicadas -- se bajó _TARIFA_BETA_KM_MXN de (7,11) a (6,8), tal como autorizaba la tarea como fallback. Antes/después de un turno de 2h (semilla 0, misma corrida salvo beta): ingreso 548.26->248.72 MXN, costo_km 62.4->31.2 MXN, rho 242.93->108.76 MXN/h (nota: la comparación no es de trayectoria idéntica -- el prefiltro de feasibility.py rankea por precio/distancia, así que bajar la tarifa cambia QUÉ ofertas se evalúan primero incluso con la misma semilla).",
+    "Fechas límite: la fórmula se apretó a creado_en + tiempo_directo*1.6 + 20min (antes: tiempo_listo_en + ...*1.6 + 10min, con el margen de preparación GRATIS encima). Resultado: puntualidad SIGUE en 1.00 exacto en las tres políticas, confirmado tras el cambio. Causa raíz encontrada (no es que el margen siga siendo grande): `sequencer.verificar_y_calendarizar` trata fecha_limite como restricción DURA (rechaza cualquier secuencia que la violaría, igual que frescura/capacidad) -- pero ai/CLAUDE.md §2 sólo lista frescura, capacidad y precedencia como duras; fecha_limite está pensada como BLANDA (§7: penalización `psi_i * max(0, T_entrega - limite_i)` en la recompensa). Con el límite hard-masked, ese código de penalización nunca se ejecuta -- es código muerto, y ninguna fórmula de límite puede crear riesgo real mientras esto no cambie. Es un cambio de arquitectura del secuenciador (la pasada hacia atrás usa l_idx como ancla para las cotas de espera estratégica de frescura), no una línea -- no se tocó esta vuelta (fuera del presupuesto de 5 min de la tarea); queda documentado como el bloqueo real para que puntualidad dependa de la política.",
+    "Prueba de sanidad completa (20 escenarios x 2h) DESPUÉS de los tres arreglos: B1 rho=345.97, B2=338.39, B2-ingenuo=334.63, bundling~0.88-0.89 en las tres, puntualidad=1.00. B2 vs B1 = **-2.2%** (B2 quedó LIGERAMENTE PEOR que la política ingenua, no mejor) -- resultado honesto, no se suavizó. Lectura: con tope_ka en 89.1% del histograma de rechazos (bajó de 96-99.7% pero sigue dominando total), el entorno sigue tan saturado de demanda que el plan llega a su tope casi de inmediato aun con K_A_MAXIMO=4; en ese régimen, la selectividad de B2 (esperar una tasa marginal mejor) cuesta más rendimiento del que gana, mientras B1 (aceptar la primera factible) mantiene el pipeline lleno. La tarea es explícita en que esto no bloquea seguir: 'no importa qué salga, pasamos a entrenamiento igual'.",
+    "Clonación de comportamiento (BC) sobre B2: 50 000 transiciones (5 escenarios semilla 0-4, L1), concordancia_val=0.998 (objetivo >=0.80, superado). PERO la primera corrida (entropía cruzada sin ponderar) dio rho_rollout=0.00 en 20 escenarios -- la red predice perfecto en datos i.i.d. pero colapsa a 'rechazar siempre' en rollout cerrado: 'rechazar_todas' es ~90%+ de las transiciones (tope_ka domina), así que la entropía cruzada promedio ignora casi por completo las acciones de ACEPTAR, que son las únicas que importan. Se diagnosticó (no se subieron épocas a ciegas): pesos de clase balanceados (inverso a frecuencia, cap 20x) en la pérdida. Con eso, concordancia específica en acciones de aceptar subió a ~90-97% (era ~ignorada antes) -- PERO el rollout SIGUE colapsando a rho=0.00 (detectado barato con una corrida de humo de 3 escenarios antes de pagar los 20 completos). Esto ya no es un bug de features ni de balance de clases: es la limitación clásica de behavior cloning puro (error compuesto / distribution shift en lazo cerrado) que MaskablePPO, inicializado desde este mismo checkpoint y corrigiendo con datos on-policy, está diseñado para resolver -- por eso la tarea pide PPO como el siguiente paso, no un BC perfecto. `checkpoints/bc_policy.pt` guardado tal cual (piso documentado como no-funcional en rollout aislado, no como éxito).",
+    "MaskablePPO lanzado desde bc_policy.pt vía lanzar.ps1 y CONFIRMADO en vivo: steps/s=490 medidos (16 envs, DummyVecEnv, L1), pero evaluar 10 escenarios de validación cuesta 606.6s contra sólo 51.0s de entrenar 25 000 pasos -- la evaluación domina el costo por ciclo 12x. Sin medir esto, pasos_objetivo se hubiera dimensionado como si evaluar fuera gratis y la corrida real hubiera tardado ~4 días en vez de las ~8h pedidas, sin que nada lo avisara hasta muy tarde. Se corrigió midiendo el costo de UNA evaluación completa antes de fijar pasos_objetivo (ahora 1 075 000 = 43 ciclos de 25 000, ~8h reales). Primer callback confirmado: paso=25008, rho_val=0.00 (igual al piso de BC, esperado: recién arrancó la corrección on-policy), eta=469min, status.json y train_log.jsonl actualizados, checkpoint guardado en checkpoints/ppo_best.zip.",
+    "Bug encontrado y corregido al medir steps/s: el benchmark original usaba `action_space.sample()` (acción aleatoria SIN máscara). `env._aplicar_accion` no vuelve a imponer K_A_MAXIMO por su cuenta (sólo lo hace `feasibility.action_mask`, que toda política real respeta por construcción), así que una acción de aceptar fuera de máscara coló un 5º pedido y disparó el assert de seguridad de `_aceptar_oferta`, tumbando el proceso en segundo plano a los pocos segundos. Corregido: el benchmark ahora muestrea sólo entre las acciones que la máscara permite (mismo patrón que `baselines.politica_aleatoria`). MaskablePPO en sí nunca samplea fuera de máscara (por diseño de sb3-contrib), así que esto no afecta el entrenamiento real -- sólo afectaba a este script de medición.",
+    "En L0 no hay competidores sintéticos (n_competidores_base=0 por diseño), así que p_gana_estimada=1.0 siempre; B2 vs B2-ingenuo dio +1.1% en esta corrida.",
+    "evaluate.py, export_vygo.py siguen siendo stubs sin cuerpo.",
     "baselines B0 (aleatoria) y B3 (MILP rodante) no implementados -- sólo B1/B2/B2-ingenuo (docs/vygo-ai-training.md §6.1); scenarios/test_50.pkl no existe."
   ],
-  "siguiente_paso_sugerido": "El generador queda congelado (regla explícita de la tarea). Decidir si vale la pena subir K_A_MAXIMO/UMBRAL_EXACTO_PEDIDOS por encima de 3 (causa real y dominante del histograma de rechazos) a cambio de steps/s, y de ahí avanzar a implementar train_ppo.py -- el criterio de selección (+17.8% B2 vs B1) ya es presentable con el estado actual."
+  "siguiente_paso_sugerido": "Vigilar reports/train_log.jsonl: si PPO no logra rho_val > 0 en las primeras evaluaciones, el problema es el mismo régimen saturado por tope_ka que ya hundió a B2 -- ahí sí valdría la pena reconsiderar K_A_MAXIMO o el hard-mask de fecha_limite antes de seguir. Si PPO sí despega, dejarlo correr hasta pasos_objetivo y comparar contra B1/B2 con evaluate.py (todavía stub)."
 }

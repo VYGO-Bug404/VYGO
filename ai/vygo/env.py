@@ -42,7 +42,7 @@ from vygo.generator import DURACION_RONDA_S, EXPIRA_OFERTA_S, GeneradorPedidos, 
 from vygo.geo import GridWorld
 from vygo.insertion import EstadoRuta, OfertaCandidata, eval_insertion
 from vygo.schema import CLIMA_SIMULABLE, Vehiculo, VEHICULOS
-from vygo.sequencer import Parada, Restricciones, held_karp, verificar_y_calendarizar
+from vygo.sequencer import Parada, Restricciones, held_karp, n_pedidos_en_plan, verificar_y_calendarizar
 from vygo.weather import CadenaClima
 
 DURACION_TURNO_S = 6 * 3600.0
@@ -162,6 +162,11 @@ class VygoEnv(gymnasium.Env):
         otra para `_info()`); `_obs()` e `_info()` sólo leen `self._ultima_mask`."""
         self._ultima_mask = action_mask(self._estado_ruta())
 
+    def action_masks(self) -> np.ndarray:
+        """Convención de sb3-contrib (`MaskableEnv`/`get_action_masks`): MaskablePPO la
+        busca por este nombre exacto, directo o a través de `ActionMasker`."""
+        return self._ultima_mask
+
     # ------------------------------------------------------------------ acción ---
 
     def _carga_a_bordo(self) -> int:
@@ -271,9 +276,12 @@ class VygoEnv(gymnasium.Env):
 
         # TOPE DURO K_A: action_mask ya no ofrece slots factibles con el plan lleno (§
         # feasibility.K_A_MAXIMO), así que esto nunca debería dispararse -- es la red de
-        # seguridad explícita que pide la tarea, no la única línea de defensa.
-        assert len(self.plan) // 2 <= K_A_MAXIMO, (
-            f"plan activo con {len(self.plan) // 2} pedidos, excede K_A_MAXIMO={K_A_MAXIMO}"
+        # seguridad explícita que pide la tarea, no la única línea de defensa. Cuenta
+        # PEDIDOS distintos (`n_pedidos_en_plan`), no paradas/2: con una recogida ya hecha
+        # el plan tiene una parada menos por ese pedido y `len(plan)//2` lo subcuenta.
+        n_pedidos_actual = n_pedidos_en_plan(self.plan)
+        assert n_pedidos_actual <= K_A_MAXIMO, (
+            f"plan activo con {n_pedidos_actual} pedidos, excede K_A_MAXIMO={K_A_MAXIMO}"
         )
 
         if not self._recalendarizar():
@@ -327,11 +335,13 @@ class VygoEnv(gymnasium.Env):
         self._agendar(t_llegada, "pedido", pedido.id)
 
     def _recalendarizar(self) -> bool:
-        """Reoptimización EXACTA completa (held_karp, camino exacto porque el plan nunca
-        pasa de K_A_MAXIMO pedidos) -- se corre UNA sola vez por cambio de plan (aceptar,
-        revertir tras perder, entregar/recoger), nunca por cada oferta evaluada (eso lo
-        hace `insertion.mejor_insercion`, barato). Deja `self.plan` REORDENADO según el
-        óptimo encontrado: de ahí en adelante el plan siempre está en su orden vigente, y
+        """Reoptimización completa (held_karp) -- se corre UNA sola vez por cambio de plan
+        (aceptar, revertir tras perder, entregar/recoger), nunca por cada oferta evaluada
+        (eso lo hace `insertion.mejor_insercion`, barato). Exacta mientras el plan tenga
+        <=`sequencer.UMBRAL_EXACTO_PEDIDOS` pedidos; con el 4º (permitido por
+        `feasibility.K_A_MAXIMO`, que ya no es el mismo número) usa el camino heurístico,
+        rápido y ya probado, sólo sin garantía de óptimo exacto. Deja `self.plan` REORDENADO
+        según el óptimo encontrado: de ahí en adelante el plan siempre está en su orden vigente, y
         tanto la inserción barata como el evento de nodo pueden asumirlo (parada 0 = la
         próxima) sin volver a preguntarle a held_karp.
 

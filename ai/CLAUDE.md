@@ -151,11 +151,17 @@ ai/
 def held_karp(stops, t0, pos0, travel_fn, constraints, k=10) -> tuple[list[int], float, float, bool, int]:
     """Devuelve (orden_óptimo, tiempo_total, distancia_total, optimo_exacto, secuencias_evaluadas).
     Si no existe secuencia factible: (None, inf, inf, optimo_exacto, secuencias_evaluadas).
-    <=4 pedidos (<=8 paradas): enumeración exacta de todas las secuencias válidas por
-    precedencia -- optimo_exacto=True, secuencias_evaluadas=las que había que enumerar
-    (90 con 3 pedidos, 2520 con 4). >4 pedidos: camino heurístico (DP + perturbación),
-    optimo_exacto=False. Contrato con el frontend: la UI sólo puede decir "óptimo exacto
-    sobre N secuencias" cuando optimo_exacto es True."""
+    <=UMBRAL_EXACTO_PEDIDOS pedidos (hoy 3, <=6 paradas): enumeración exacta de todas las
+    secuencias válidas por precedencia -- optimo_exacto=True, secuencias_evaluadas=las que
+    había que enumerar (90 con 3 pedidos). Más que eso: camino heurístico (DP +
+    perturbación), optimo_exacto=False. Contrato con el frontend: la UI sólo puede decir
+    "óptimo exacto sobre N secuencias" cuando optimo_exacto es True.
+
+    UMBRAL_EXACTO_PEDIDOS es una decisión de ALGORITMO, NO el tope de cuántos pedidos caben
+    en el plan activo -- ese es feasibility.K_A_MAXIMO (hoy 4), independiente a propósito
+    desde la tarea "diagnostico de agrupamiento": con K_A_MAXIMO > UMBRAL_EXACTO_PEDIDOS,
+    el plan puede tener un pedido más que lo que held_karp resuelve exacto, calendarizado
+    por el camino heurístico (rápido, sin garantía de óptimo)."""
 
 # insertion.py
 def eval_insertion(plan, oferta, estado) -> tuple[float, float, bool]:
@@ -163,6 +169,7 @@ def eval_insertion(plan, oferta, estado) -> tuple[float, float, bool]:
 
 # feasibility.py
 def action_mask(estado) -> np.ndarray:      # shape (K_F + 2,), dtype bool
+K_A_MAXIMO = 4   # tope de pedidos en el plan activo (problema, no algoritmo)
 
 # env.py
 class VygoEnv(gymnasium.Env):

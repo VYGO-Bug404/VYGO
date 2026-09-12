@@ -1,0 +1,80 @@
+{
+  "n_transiciones": 50000,
+  "n_train": 40000,
+  "n_val": 10000,
+  "curva": [
+    {
+      "epoca": 1,
+      "perdida_train": 0.1426304722541016,
+      "perdida_val": 0.0071534025482833385,
+      "concordancia_val": 0.9987000226974487,
+      "concordancia_aceptar_val": 1.0
+    },
+    {
+      "epoca": 2,
+      "perdida_train": 0.04191144794536439,
+      "perdida_val": 0.007349181920289993,
+      "concordancia_val": 0.9986000061035156,
+      "concordancia_aceptar_val": 0.9772727489471436
+    },
+    {
+      "epoca": 3,
+      "perdida_train": 0.04148800798563765,
+      "perdida_val": 0.013699734583497047,
+      "concordancia_val": 0.9983000159263611,
+      "concordancia_aceptar_val": 0.9090909361839294
+    },
+    {
+      "epoca": 4,
+      "perdida_train": 0.03468659235894483,
+      "perdida_val": 0.014044621028006077,
+      "concordancia_val": 0.9983999729156494,
+      "concordancia_aceptar_val": 0.9318181872367859
+    },
+    {
+      "epoca": 5,
+      "perdida_train": 0.028749292369586944,
+      "perdida_val": 0.010305783711373806,
+      "concordancia_val": 0.9984999895095825,
+      "concordancia_aceptar_val": 0.9318181872367859
+    },
+    {
+      "epoca": 6,
+      "perdida_train": 0.03523938745457414,
+      "perdida_val": 0.0120024299249053,
+      "concordancia_val": 0.9986000061035156,
+      "concordancia_aceptar_val": 0.9772727489471436
+    },
+    {
+      "epoca": 7,
+      "perdida_train": 0.03425450123790038,
+      "perdida_val": 0.014915700070559978,
+      "concordancia_val": 0.9983000159263611,
+      "concordancia_aceptar_val": 0.9090909361839294
+    },
+    {
+      "epoca": 8,
+      "perdida_train": 0.03198521518502988,
+      "perdida_val": 0.011627704836428165,
+      "concordancia_val": 0.9983999729156494,
+      "concordancia_aceptar_val": 0.9090909361839294
+    },
+    {
+      "epoca": 9,
+      "perdida_train": 0.03076548821563755,
+      "perdida_val": 0.02306828275322914,
+      "concordancia_val": 0.9983999729156494,
+      "concordancia_aceptar_val": 0.9090909361839294
+    },
+    {
+      "epoca": 10,
+      "perdida_train": 0.02810344442492351,
+      "perdida_val": 0.015397449024021626,
+      "concordancia_val": 0.9984999895095825,
+      "concordancia_aceptar_val": 0.9318181872367859
+    }
+  ],
+  "concordancia_final": 0.9984999895095825,
+  "concordancia_aceptar_final": 0.9318181872367859,
+  "rho_red_20_escenarios": null
+}

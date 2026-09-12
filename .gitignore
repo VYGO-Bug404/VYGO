@@ -13,3 +13,4 @@ ai/runs/
 ai/**/__pycache__/
 ai/*.egg-info
 ai/scenarios/*.pkl
+ai/reports/*.log

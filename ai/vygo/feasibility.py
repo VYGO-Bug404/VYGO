@@ -5,10 +5,17 @@ problema de entrenamiento. Enmascarar (no penalizar) es la diferencia entre un a
 aprende y uno que no (docs/modelo-matematico.md §4.4): el gradiente de la acción
 enmascarada es exactamente cero, sin sesgo.
 
-TOPE DURO K_A: el plan activo nunca pasa de `K_A_MAXIMO` pedidos (mismo número que el
-umbral exacto de `sequencer.held_karp`) -- con 5 pedidos la enumeración exacta salta de
-2520 a 113400 secuencias. Con el plan lleno, TODAS las ofertas se marcan infactibles sin
-siquiera evaluarlas.
+TOPE DURO K_A: el plan activo nunca pasa de `K_A_MAXIMO` pedidos. Con el plan lleno, TODAS
+las ofertas se marcan infactibles sin siquiera evaluarlas.
+
+K_A_MAXIMO es una decisión DEL PROBLEMA (cuántos pedidos caben en el plan del repartidor),
+independiente de `sequencer.UMBRAL_EXACTO_PEDIDOS` (decisión de ALGORITMO: hasta cuántos
+pedidos held_karp enumera exacto antes de pasar al camino heurístico). Estaban fusionadas
+hasta la tarea "diagnostico de agrupamiento y clusters de comercios" -- bajar el umbral
+exacto de 4 a 3 por presupuesto de steps/s terminaba bajándole también la capacidad al
+repartidor sin necesidad. Con K_A_MAXIMO=4 > UMBRAL_EXACTO_PEDIDOS=3, el 4º pedido del plan
+se calendariza con el camino heurístico (ya rápido) en vez del exacto; el 3er commit sigue
+siendo exacto. Ver reports/HANDOFF.md.
 
 PREFILTRO: de las hasta K_F=8 ofertas visibles, sólo se calendarizan (con `eval_insertion`,
 ya barato desde el patch de inserción) las `N_PREFILTRO` mejores por un puntaje BARATÍSIMO
@@ -26,10 +33,12 @@ from collections import Counter
 import numpy as np
 
 from vygo.insertion import EstadoRuta, OfertaCandidata, baseline_plan, eval_insertion
-from vygo.sequencer import UMBRAL_EXACTO_PEDIDOS, verificar_y_calendarizar
+from vygo.sequencer import n_pedidos_en_plan, verificar_y_calendarizar
 
 K_F = 8
-K_A_MAXIMO = UMBRAL_EXACTO_PEDIDOS
+# Decisión DEL PROBLEMA (cuántos pedidos caben en el plan), no del algoritmo -- ver
+# docstring del módulo. Independiente de `sequencer.UMBRAL_EXACTO_PEDIDOS`.
+K_A_MAXIMO = 4
 N_PREFILTRO = 3
 HOLGURA_MINIMA_REPOSICIONAR_S = 5 * 60.0
 
@@ -110,7 +119,7 @@ def action_mask(estado: EstadoRuta, instrumentar: bool = False) -> np.ndarray:
     matando el agrupamiento, ver ai/reports/HANDOFF.md."""
 
     mask = np.zeros(K_F + 2, dtype=bool)
-    n_pedidos_plan = len(estado.plan) // 2
+    n_pedidos_plan = n_pedidos_en_plan(estado.plan)
     diag_activo = instrumentar and n_pedidos_plan >= 1
 
     if n_pedidos_plan < K_A_MAXIMO:

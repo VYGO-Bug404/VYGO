@@ -12,6 +12,7 @@ import numpy as np
 
 from vygo.feasibility import CONTADOR_MOTIVOS, K_F, action_mask
 from vygo.insertion import EstadoRuta, eval_insertion
+from vygo.sequencer import n_pedidos_en_plan
 
 COSTO_KM_MXN = 1.2
 
@@ -81,7 +82,7 @@ def politica_umbral(
     pedido -- la máscara sola no puede distinguir estas dos, sólo la política lo sabe."""
 
     mask = action_mask(estado, instrumentar=instrumentar)
-    n_pedidos_plan = len(estado.plan) // 2
+    n_pedidos_plan = n_pedidos_en_plan(estado.plan)
     diag_activo = instrumentar and n_pedidos_plan >= 1
 
     candidatas: list[tuple[int, float]] = []

@@ -16,7 +16,7 @@ import numpy as np
 import pytest
 
 from vygo.geo import GridWorld
-from vygo.schema import CLIMA_SIMULABLE
+from vygo.schema import CLIMA_SIMULABLE, Clima
 from vygo.sequencer import Parada, Restricciones, held_karp, verificar_y_calendarizar
 
 PASOS_ENV_TEST = 150
@@ -206,6 +206,46 @@ def test_held_karp_vs_fuerza_bruta_4_pedidos(n_pedidos, seed):
     assert tiempo_hk == pytest.approx(tiempo_fb, abs=1e-6)
     assert exacto is False
     assert evaluadas > 0
+
+
+def test_k_a_maximo_desacoplado_de_umbral_exacto_permite_cuarto_pedido():
+    """feasibility.K_A_MAXIMO (tope de PEDIDOS en el plan, decisión del problema) es
+    independiente de sequencer.UMBRAL_EXACTO_PEDIDOS (hasta cuántos pedidos held_karp
+    enumera exacto, decisión de algoritmo) -- ver ai/CLAUDE.md §5. Antes de la tarea
+    "diagnostico de agrupamiento" estaban fusionadas (K_A_MAXIMO = UMBRAL_EXACTO_PEDIDOS),
+    así que bajar el umbral exacto de 4 a 3 por rendimiento le bajaba la capacidad al
+    repartidor de regalo. Con K_A_MAXIMO=4 > UMBRAL_EXACTO_PEDIDOS=3, un plan con 3 pedidos
+    ya comprometidos debe seguir aceptando una 4a oferta factible (calendarizada por el
+    camino heurístico de held_karp, no el exacto -- eso no la vuelve infactible)."""
+    from vygo.feasibility import K_A_MAXIMO, action_mask
+    from vygo.insertion import EstadoRuta, OfertaCandidata
+    from vygo.sequencer import UMBRAL_EXACTO_PEDIDOS
+
+    assert K_A_MAXIMO > UMBRAL_EXACTO_PEDIDOS, "K_A_MAXIMO debe permitir más que el camino exacto"
+    assert K_A_MAXIMO == 4
+
+    plan: list[Parada] = []
+    restricciones = Restricciones(capacidad=10, r={}, l={}, theta={}, carga={})
+    for i in range(3):
+        pid = f"p{i}"
+        plan.append(Parada(pid, "recogida", (i, 0)))
+        plan.append(Parada(pid, "entrega", (i, 5)))
+        restricciones.r[pid] = 0.0
+        restricciones.l[pid] = None
+        restricciones.theta[pid] = None
+        restricciones.carga[pid] = 1
+
+    oferta = OfertaCandidata(
+        id="p3", pos_recogida=(10, 0), pos_entrega=(10, 5), r=0.0, l=None, theta=None,
+        carga=1, expira_en=None, precio=50.0, anillo=1, p_gana_estimada=1.0,
+    )
+    estado = EstadoRuta(
+        t=0.0, pos=(0, 0), clima=Clima.DESPEJADO, plan=plan, restricciones=restricciones,
+        travel_fn=_travel_fn_lineal, ofertas=[oferta],
+    )
+
+    mask = action_mask(estado)
+    assert mask[0], "con 3 pedidos en el plan, una 4a oferta factible debe seguir aceptándose"
 
 
 def test_held_karp_espera_estrategica():

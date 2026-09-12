@@ -33,7 +33,11 @@ MAX_RONDAS = 3
 EXPIRA_OFERTA_S = 30.0
 
 _TARIFA_BASE_MXN = (28.0, 38.0)
-_TARIFA_BETA_KM_MXN = (7.0, 11.0)
+# Bajado de (7,11) a (6,8) MXN/km (tarea "economia corregida"): revisada la contabilidad
+# completa (ingreso, costo por km, conversión de horas) y no hay bug de conversión --
+# rho_hat salía en 227-275 MXN/h porque la tarifa por km era generosa, no por un factor de
+# unidades mal aplicado. Ver ai/reports/HANDOFF.md para el desglose antes/después.
+_TARIFA_BETA_KM_MXN = (6.0, 8.0)
 # Subido el techo de 25 a 35 min (mismo motivo que la intensidad, ver más abajo): más
 # tiempo de preparación es más holgura natural (sigma_i) para que aceptar un segundo
 # pedido cercano "quepa gratis" en la espera del primero -- eso es lo que hace rentable
@@ -248,13 +252,14 @@ class GeneradorPedidos:
             prep_s = comercio.prep_media_s
         tiempo_listo_en = t + prep_s
 
-        # Fecha límite y tolerancia de frescura: el generador no especifica una sampling
-        # explícita para l_i/theta_i (§1.3 del modelo matemático), así que se derivan de la
-        # distancia directa origen->destino con margen generoso -- suficiente para que la
-        # mayoría de los pedidos sean cumplibles sin agrupar (frescura ajustada es la
-        # EXCEPCIÓN que fuerza espera estratégica o rechazo, no la norma).
+        # Fecha límite: ANCLADA a creado_en (t), no a tiempo_listo_en (tarea "aprieta las
+        # fechas límite") -- antes el margen de preparación (6-35 min) se sumaba GRATIS
+        # encima del límite, así que éste nunca ataba de verdad (puntualidad=1.00 exacta en
+        # las tres políticas: la tensión central del problema no existía). Ahora el tiempo
+        # de preparación CUENTA contra el límite, igual que en la vida real -- un pedido no
+        # deja de tener prisa sólo porque la cocina tarda.
         dt_directo, _dm = self.grid.travel(comercio.pos, destino, tiempo_listo_en, clima_actual)
-        fecha_limite = tiempo_listo_en + dt_directo * 1.6 + 600.0
+        fecha_limite = t + dt_directo * 1.6 + 20 * 60.0
         theta_frescura = float(self.rng.uniform(900.0, 2400.0))
 
         self.n_pedidos_creados += 1

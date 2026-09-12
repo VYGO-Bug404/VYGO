@@ -45,15 +45,16 @@ _MAX_ITER_PUNTO_FIJO = 20
 _EPS = 1e-6
 
 # Con <=3 pedidos (<=6 paradas) enumerar TODAS las secuencias válidas por precedencia es
-# trivial (90 secuencias) y exacto: nada de heurística de perturbación.
-# PÚBLICA a propósito: es el mismo K_A que env.py/feasibility.py usan como tope duro del
-# plan activo (nunca aceptar un 4º pedido) -- una sola fuente de verdad para el número.
+# trivial (90 secuencias) y exacto: nada de heurística de perturbación. Con más pedidos se
+# usa el camino heurístico (DP + perturbación, § held_karp) -- rápido, no exacto.
 #
-# Bajado de 4 a 3 (documentado, autorizado explícitamente por la tarea que arregló el
-# cuello de botella de llamadas): con K_A=4 (2520 secuencias) el benchmark de 16 entornos
-# daba 775.7 steps/s -- por encima del piso de 300 pero por debajo del objetivo real de
-# 1000. Con K_A=3 (90 secuencias, la guardia de tiempo de 25ms de held_karp deja de
-# activarse en la práctica) el mismo benchmark da 1617.6 steps/s. Ver reports/HANDOFF.md.
+# ESTO ES UNA DECISIÓN DE ALGORITMO, no del problema: NO es el tope de cuántos pedidos
+# caben en el plan activo (ese es `feasibility.K_A_MAXIMO`, independiente). Estaban
+# fusionadas hasta la tarea "diagnostico de agrupamiento": bajar este umbral de 4 a 3 por
+# presupuesto de steps/s (con K=4, 2520 secuencias, 775.7 steps/s con 16 entornos; con K=3,
+# 90 secuencias, 1617.6 steps/s) terminaba bajándole también la capacidad al repartidor,
+# sin necesidad -- el camino heurístico para 4+ pedidos ya es rápido y ya se usa en
+# producción para el 4º pedido de `K_A_MAXIMO`. Ver reports/HANDOFF.md.
 UMBRAL_EXACTO_PEDIDOS = 3
 
 # Guardia de tiempo del camino exacto (§ held_karp): si enumerar+verificar las hasta 2520
@@ -82,6 +83,16 @@ class Parada:
     id: str
     tipo: str  # "recogida" | "entrega"
     pos: tuple[int, int]
+
+
+def n_pedidos_en_plan(plan: list[Parada]) -> int:
+    """Número de PEDIDOS distintos en el plan, no de paradas. `len(plan) // 2` es sólo una
+    aproximación: falla en cuanto un pedido ya recogido deja sólo su parada de entrega en el
+    plan (la recogida se hace `pop` al procesarse) -- un plan con un pedido a medio entregar
+    y dos sin recoger tiene 5 paradas, no 6, y `//2` lo subcuenta en 1. Contar IDs únicos es
+    correcto siempre, con o sin recogidas ya consumidas."""
+
+    return len({p.id for p in plan})
 
 
 @dataclass(slots=True)
@@ -628,14 +639,15 @@ def held_karp(
 
     `stops`: lista de Parada (o dicts con id/tipo/pos), <=12. `constraints`: Restricciones
     (o dict con las mismas claves). `k`: cuántas candidatas por tiempo de completado se
-    intentan calendarizar hacia atrás antes de rendirse en el camino heurístico (>4
-    pedidos). Parametrizable para el escalón de rendimiento bitmask/beam/K de ai/CLAUDE.md.
+    intentan calendarizar hacia atrás antes de rendirse en el camino heurístico (más de
+    `UMBRAL_EXACTO_PEDIDOS` pedidos). Parametrizable para el escalón de rendimiento
+    bitmask/beam/K de ai/CLAUDE.md.
 
     `optimo_exacto`: True si se enumeraron TODAS las secuencias válidas por precedencia
-    (<=4 pedidos) y se devuelve la mejor real -- no una aproximación. `secuencias_evaluadas`:
-    cuántas se calendarizaron para llegar al resultado. Es parte del contrato con el
-    frontend (la UI sólo puede decir "óptimo exacto sobre N secuencias" cuando es cierto):
-    no cambiar sin actualizar ai/CLAUDE.md §5.
+    (<=`UMBRAL_EXACTO_PEDIDOS` pedidos) y se devuelve la mejor real -- no una aproximación.
+    `secuencias_evaluadas`: cuántas se calendarizaron para llegar al resultado. Es parte del
+    contrato con el frontend (la UI sólo puede decir "óptimo exacto sobre N secuencias"
+    cuando es cierto): no cambiar sin actualizar ai/CLAUDE.md §5.
     """
 
     global _contador_candidatas_agotadas
