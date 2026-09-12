@@ -1,28 +1,28 @@
 # HANDOFF — B0-andamiaje
 
-_Generado: 2026-09-12T08:44:23+00:00 · commit `d3e0f53`_
+_Generado: 2026-09-12T09:00:49+00:00 · commit `b9a4b55` (sucio: hay cambios sin commitear)_
 
 ## Qué se construyó
 
-- Andamiaje de `ai/`: estructura de carpetas (`config/`, `vygo/`, `tests/`, `scenarios/`, `reports/`), `requirements.txt` y `Makefile` con los targets de §10.
+- Andamiaje de `ai/`: estructura de carpetas (`config/`, `vygo/`, `tests/`, `scenarios/`, `reports/`), `requirements.txt`, `run.py` (punto de entrada multiplataforma) y `Makefile` como envoltura delgada de `run.py` — ver §10.
 - `vygo/schema.py`: enums y dataclasses espejo exacto del esquema VYGO (apps, pedidos, ofertas_pedido, difusiones_pedido, viaje_pedidos, repartidores, configuracion) — ver `docs/vygo-ai-training.pdf`.
-- `vygo/report.py`: este generador de `reports/status.json` y `reports/HANDOFF.md`, con diagnóstico automático de antipatrones (§7).
+- `vygo/report.py`: este generador de `reports/status.json` y `reports/HANDOFF.md`, con diagnóstico automático de antipatrones (§7); cuenta pasaron/fallaron/xfail por separado y marca `dirty` si el repo tiene cambios sin commitear.
 - Firmas públicas congeladas (cuerpo `NotImplementedError`): `held_karp`, `eval_insertion`, `action_mask`, `VygoEnv`, `politica_umbral` — ver §5.
 - `tests/test_invariants.py`: 6 pruebas de invariantes, marcadas `xfail` porque el entorno todavía no existe.
 
 ## Qué se midió
 
-- Tests: 6 pasaron, 0 fallaron.
+- Tests: 0 pasaron, 6 xfail (fallo esperado, no cuentan como éxito), 0 fallaron.
 - No hay entorno, baselines ni entrenamiento corridos todavía — todos los campos numéricos de `status.json` están en `null` o `"no_implementado"`.
 
 ## Qué falló
 
-- Nada inesperado. Los 6 tests de invariantes fallan como se esperaba (xfail): importan o llaman módulos (`vygo.env`, `vygo.sequencer`, `vygo.geo`, ...) que aún no tienen cuerpo.
+- Nada inesperado. Los 6 tests de invariantes quedan en xfail: importan o llaman módulos (`vygo.env`, `vygo.sequencer`, `vygo.geo`, ...) que aún no tienen cuerpo.
 
 ## Qué sigue
 
 - Implementar `vygo/geo.py` (rejilla 20×20 L0) y `vygo/generator.py` (llegada de pedidos + difusión por rondas) para tener un entorno L0 mínimo.
-- Con eso, implementar `vygo/env.py` (VygoEnv) y correr `make bench` (objetivo ≥5000 steps/s con 16 entornos).
+- Con eso, implementar `vygo/env.py` (VygoEnv) y correr `python run.py bench` (objetivo ≥5000 steps/s con 16 entornos).
 - Implementar `vygo/sequencer.py` (Held–Karp) y `vygo/feasibility.py` (máscara exacta) antes de tocar baselines o entrenamiento.
 
 ## Bloqueos
@@ -34,4 +34,4 @@ _Generado: 2026-09-12T08:44:23+00:00 · commit `d3e0f53`_
 
 ## Siguiente paso sugerido
 
-Implementar vygo/geo.py (rejilla L0) y vygo/generator.py (llegada de pedidos) para tener un VygoEnv mínimo y poder correr make bench.
+Implementar vygo/geo.py (rejilla L0) y vygo/generator.py (llegada de pedidos) para tener un VygoEnv mínimo y poder correr python run.py bench.

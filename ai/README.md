@@ -17,13 +17,17 @@ pip install -r requirements.txt
 
 ## Uso
 
+El equipo trabaja en Windows 10, donde `make` no está disponible. El punto de entrada es
+`run.py` (funciona igual en Windows, macOS y Linux); `Makefile` es sólo una envoltura delgada
+de los mismos subcomandos para quien sí tenga `make`.
+
 ```bash
-make test       # pytest tests/ -q
-make bench      # steps/s del entorno
-make baselines  # B0..B2 sobre escenarios congelados
-make train SEED=0
-make eval       # evaluación pareada final
-make report     # regenera reports/
+python run.py test        # pytest tests/ -q
+python run.py bench       # steps/s del entorno
+python run.py baselines   # B0..B2 sobre escenarios congelados
+python run.py train --seed 0
+python run.py eval        # evaluación pareada final
+python run.py report      # regenera reports/
 ```
 
 ## Contrato con el frontend

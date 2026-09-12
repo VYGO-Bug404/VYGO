@@ -1,15 +1,17 @@
 {
-  "generado_en": "2026-09-12T08:44:23+00:00",
+  "generado_en": "2026-09-12T09:00:49+00:00",
   "bloque": "B0-andamiaje",
-  "commit": "d3e0f53",
+  "commit": "b9a4b55",
+  "dirty": true,
   "entorno": {
     "nivel": null,
     "config_hash": null,
     "steps_por_segundo": null
   },
   "tests": {
-    "pasaron": 6,
+    "pasaron": 0,
     "fallaron": 0,
+    "xfail": 6,
     "detalle_fallos": []
   },
   "invariantes": {
@@ -68,5 +70,5 @@
     "sequencer.held_karp, insertion.eval_insertion y feasibility.action_mask tienen firma pero levantan NotImplementedError.",
     "baselines B0-B3 no implementados; scenarios/test_50.pkl todavía no existe."
   ],
-  "siguiente_paso_sugerido": "Implementar vygo/geo.py (rejilla L0) y vygo/generator.py (llegada de pedidos) para tener un VygoEnv mínimo y poder correr make bench."
+  "siguiente_paso_sugerido": "Implementar vygo/geo.py (rejilla L0) y vygo/generator.py (llegada de pedidos) para tener un VygoEnv mínimo y poder correr python run.py bench."
 }

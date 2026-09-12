@@ -3,19 +3,19 @@ SEED ?= 0
 .PHONY: test bench baselines train eval report
 
 test:
-	pytest tests/ -q
+	python run.py test
 
 bench:
-	python -m vygo.env --bench
+	python run.py bench
 
 baselines:
-	python -m vygo.baselines
+	python run.py baselines
 
 train:
-	python -m vygo.train_ppo --seed $(SEED)
+	python run.py train --seed $(SEED)
 
 eval:
-	python -m vygo.evaluate
+	python run.py eval
 
 report:
-	python -m vygo.report
+	python run.py report

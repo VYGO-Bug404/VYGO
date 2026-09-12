@@ -224,7 +224,7 @@ copiarse y pegarse completo en un chat: **máximo ~150 líneas**.
   "bloque": "B3-baselines",
   "commit": "abc1234",
   "entorno": {"nivel": "L1", "config_hash": "...", "steps_por_segundo": 6200},
-  "tests": {"pasaron": 14, "fallaron": 0, "detalle_fallos": []},
+  "tests": {"pasaron": 14, "fallaron": 0, "xfail": 0, "detalle_fallos": []},
   "invariantes": {
     "violaciones_frescura": 0,
     "violaciones_capacidad": 0,
@@ -262,6 +262,9 @@ copiarse y pegarse completo en un chat: **máximo ~150 líneas**.
 }
 ```
 
+**Los `xfail` NO cuentan como `pasaron`.** Un test marcado `xfail` es un test que aún no puede
+pasar; contarlo como éxito produce un tablero en verde que miente. Van en su propio campo.
+
 `HANDOFF.md` es la versión narrada de lo mismo: qué se construyó, qué se midió, qué falló, qué
 sigue. Máximo 2 páginas. **Se escribe para alguien que no ha visto el código.**
 
@@ -273,11 +276,20 @@ exacta, Held–Karp, B2, evaluación pareada.
 
 ## 10. Comandos
 
+El equipo trabaja en **Windows 10**, donde `make` no está disponible. El punto de entrada es
+`ai/run.py`, con subcomandos. Funciona igual en Windows, macOS y Linux.
+
 ```bash
-make test          # pytest tests/ -q
-make bench         # mide steps/s del entorno
-make baselines     # corre B0..B2 sobre los 50 escenarios congelados
-make train SEED=0  # entrenamiento
-make eval          # evaluación pareada final
-make report        # regenera reports/
+python run.py test              # pytest tests/ -q
+python run.py bench             # mide steps/s del entorno
+python run.py baselines         # corre B0..B2 sobre los 50 escenarios congelados
+python run.py train --seed 0    # entrenamiento
+python run.py eval              # evaluación pareada final
+python run.py report            # regenera reports/
 ```
+
+Se mantiene un `Makefile` como envoltura delgada de los mismos subcomandos, para quien tenga
+`make`. **`run.py` es la referencia; el Makefile nunca debe tener lógica propia.**
+
+Nada de rutas con `/` escritas a mano ni `os.system`: usa `pathlib.Path` y `subprocess.run` con
+listas de argumentos, para que todo funcione en Windows sin cambios.

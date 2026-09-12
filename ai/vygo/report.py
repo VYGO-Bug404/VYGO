@@ -1,5 +1,5 @@
 """Genera reports/status.json (máquina) y reports/HANDOFF.md (humano) — contrato de
-ai/CLAUDE.md §8. Se corre al final de cada bloque de trabajo (`make report`).
+ai/CLAUDE.md §8. Se corre al final de cada bloque de trabajo (`python run.py report`).
 """
 
 from __future__ import annotations
@@ -26,10 +26,23 @@ def _git_commit_corto() -> str | None:
         return None
 
 
+def _git_dirty() -> bool | None:
+    """True si hay cambios sin commitear en el repo. El reporte nunca debe aparentar
+    corresponder a un commit limpio que todavía no existe."""
+    try:
+        proc = subprocess.run(
+            ["git", "status", "--porcelain"],
+            capture_output=True, text=True, cwd=_AI_ROOT, timeout=10, check=True,
+        )
+        return bool(proc.stdout.strip())
+    except Exception:
+        return None
+
+
 def _correr_tests() -> dict:
     tests_dir = _AI_ROOT / "tests"
     if not tests_dir.exists():
-        return {"pasaron": None, "fallaron": None, "detalle_fallos": []}
+        return {"pasaron": None, "fallaron": None, "xfail": None, "detalle_fallos": []}
 
     try:
         proc = subprocess.run(
@@ -37,16 +50,21 @@ def _correr_tests() -> dict:
             capture_output=True, text=True, cwd=_AI_ROOT, timeout=300,
         )
     except Exception as exc:
-        return {"pasaron": None, "fallaron": None, "detalle_fallos": [f"error al correr pytest: {exc}"]}
+        return {
+            "pasaron": None, "fallaron": None, "xfail": None,
+            "detalle_fallos": [f"error al correr pytest: {exc}"],
+        }
 
     salida = proc.stdout + proc.stderr
     conteos = {etiqueta: int(numero) for numero, etiqueta in re.findall(
         r"(\d+) (passed|failed|xfailed|xpassed|error|skipped)", salida,
     )}
-    pasaron = conteos.get("passed", 0) + conteos.get("xfailed", 0)
+    # xfail (fallo esperado) NO es un "pasaron": es su propia categoría (ai/CLAUDE.md §8).
+    pasaron = conteos.get("passed", 0)
+    xfail = conteos.get("xfailed", 0)
     fallaron = conteos.get("failed", 0) + conteos.get("xpassed", 0) + conteos.get("error", 0)
     detalle_fallos = [linea.strip() for linea in salida.splitlines() if linea.startswith("FAILED ")]
-    return {"pasaron": pasaron, "fallaron": fallaron, "detalle_fallos": detalle_fallos}
+    return {"pasaron": pasaron, "fallaron": fallaron, "xfail": xfail, "detalle_fallos": detalle_fallos}
 
 
 def diagnostico_automatico(status: dict) -> list[str]:
@@ -115,6 +133,7 @@ def _construir_status(tests: dict) -> dict:
         "generado_en": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "bloque": _BLOQUE_ACTUAL,
         "commit": _git_commit_corto(),
+        "dirty": _git_dirty(),
         "entorno": {"nivel": None, "config_hash": None, "steps_por_segundo": None},
         "tests": tests,
         "invariantes": {
@@ -154,7 +173,7 @@ def _construir_status(tests: dict) -> dict:
         ],
         "siguiente_paso_sugerido": (
             "Implementar vygo/geo.py (rejilla L0) y vygo/generator.py (llegada de pedidos) "
-            "para tener un VygoEnv mínimo y poder correr make bench."
+            "para tener un VygoEnv mínimo y poder correr python run.py bench."
         ),
     }
     status["diagnostico_automatico"] = diagnostico_automatico(status)
@@ -163,20 +182,23 @@ def _construir_status(tests: dict) -> dict:
 
 def _handoff_md(status: dict) -> str:
     tests = status["tests"]
+    sufijo_commit = " (sucio: hay cambios sin commitear)" if status["dirty"] else ""
     lineas = [
         f"# HANDOFF — {status['bloque']}",
         "",
-        f"_Generado: {status['generado_en']} · commit `{status['commit']}`_",
+        f"_Generado: {status['generado_en']} · commit `{status['commit']}`{sufijo_commit}_",
         "",
         "## Qué se construyó",
         "",
         "- Andamiaje de `ai/`: estructura de carpetas (`config/`, `vygo/`, `tests/`, "
-        "`scenarios/`, `reports/`), `requirements.txt` y `Makefile` con los targets de §10.",
+        "`scenarios/`, `reports/`), `requirements.txt`, `run.py` (punto de entrada "
+        "multiplataforma) y `Makefile` como envoltura delgada de `run.py` — ver §10.",
         "- `vygo/schema.py`: enums y dataclasses espejo exacto del esquema VYGO (apps, "
         "pedidos, ofertas_pedido, difusiones_pedido, viaje_pedidos, repartidores, "
         "configuracion) — ver `docs/vygo-ai-training.pdf`.",
         "- `vygo/report.py`: este generador de `reports/status.json` y `reports/HANDOFF.md`, "
-        "con diagnóstico automático de antipatrones (§7).",
+        "con diagnóstico automático de antipatrones (§7); cuenta pasaron/fallaron/xfail por "
+        "separado y marca `dirty` si el repo tiene cambios sin commitear.",
         "- Firmas públicas congeladas (cuerpo `NotImplementedError`): `held_karp`, "
         "`eval_insertion`, `action_mask`, `VygoEnv`, `politica_umbral` — ver §5.",
         "- `tests/test_invariants.py`: 6 pruebas de invariantes, marcadas `xfail` porque el "
@@ -184,22 +206,22 @@ def _handoff_md(status: dict) -> str:
         "",
         "## Qué se midió",
         "",
-        f"- Tests: {tests['pasaron']} pasaron, {tests['fallaron']} fallaron.",
+        f"- Tests: {tests['pasaron']} pasaron, {tests['xfail']} xfail (fallo esperado, no "
+        f"cuentan como éxito), {tests['fallaron']} fallaron.",
         "- No hay entorno, baselines ni entrenamiento corridos todavía — todos los campos "
         "numéricos de `status.json` están en `null` o `\"no_implementado\"`.",
         "",
         "## Qué falló",
         "",
-        "- Nada inesperado. Los 6 tests de invariantes fallan como se esperaba (xfail): "
-        "importan o llaman módulos (`vygo.env`, `vygo.sequencer`, `vygo.geo`, ...) que aún "
-        "no tienen cuerpo.",
+        "- Nada inesperado. Los 6 tests de invariantes quedan en xfail: importan o llaman "
+        "módulos (`vygo.env`, `vygo.sequencer`, `vygo.geo`, ...) que aún no tienen cuerpo.",
         "",
         "## Qué sigue",
         "",
         "- Implementar `vygo/geo.py` (rejilla 20×20 L0) y `vygo/generator.py` (llegada de "
         "pedidos + difusión por rondas) para tener un entorno L0 mínimo.",
-        "- Con eso, implementar `vygo/env.py` (VygoEnv) y correr `make bench` (objetivo "
-        "≥5000 steps/s con 16 entornos).",
+        "- Con eso, implementar `vygo/env.py` (VygoEnv) y correr `python run.py bench` "
+        "(objetivo ≥5000 steps/s con 16 entornos).",
         "- Implementar `vygo/sequencer.py` (Held–Karp) y `vygo/feasibility.py` (máscara "
         "exacta) antes de tocar baselines o entrenamiento.",
         "",
