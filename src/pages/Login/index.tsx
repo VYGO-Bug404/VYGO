@@ -35,11 +35,7 @@ export function LoginPage() {
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Error desconocido'
       setErrorMsg(
-        msg === '__oauth_not_configured__'
-          ? 'Apple y Google requieren configuración en el dashboard de Supabase. Por ahora usa teléfono o correo.'
-          : msg.includes('provider is not enabled') || msg.includes('not enabled') || msg.includes('400')
-          ? 'Este proveedor no está activado aún. Usa teléfono o correo.'
-          : msg.includes('Invalid login')
+        msg.includes('Invalid login')
           ? 'Correo o contraseña incorrectos'
           : msg.includes('Phone')
           ? 'Número de teléfono inválido'
@@ -54,20 +50,12 @@ export function LoginPage() {
 
   const handleApple = () =>
     withLoader(async () => {
-      try {
-        await signInWithApple()
-      } catch {
-        throw new Error('__oauth_not_configured__')
-      }
+      await signInWithApple()
     })
 
   const handleGoogle = () =>
     withLoader(async () => {
-      try {
-        await signInWithGoogle()
-      } catch {
-        throw new Error('__oauth_not_configured__')
-      }
+      await signInWithGoogle()
     })
 
   const handleSendOtp = () =>
@@ -120,8 +108,7 @@ export function LoginPage() {
               loading={loading}
               icon={<AppleLogo />}
               label="Continuar con Apple"
-              badge="Próximamente"
-              className="bg-white/90 text-black hover:bg-white"
+              className="bg-white text-black hover:bg-gray-100"
             />
 
             {/* Google */}
@@ -130,7 +117,6 @@ export function LoginPage() {
               loading={loading}
               icon={<GoogleLogo />}
               label="Continuar con Google"
-              badge="Próximamente"
               className="bg-vygo-card border border-vygo-border text-vygo-white hover:bg-vygo-card-2"
             />
 
