@@ -1,0 +1,4 @@
+# Nivel L2 — red vial real de la Zona Metropolitana de Monterrey (OSMnx). Sólo demo y
+# evaluación final; nunca se entrena aquí (ai/CLAUDE.md §2.6). Hiperparámetros pendientes
+# de definir hasta que exista la matriz de tiempos/distancias precalculada.
+nivel: L2

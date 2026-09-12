@@ -1,0 +1,21 @@
+# Requiere Python >= 3.10 (dataclasses con slots=True en vygo/schema.py).
+
+# Núcleo numérico y entorno RL
+numpy>=1.26
+gymnasium>=0.29
+
+# Entrenamiento (MaskablePPO)
+torch>=2.2
+stable-baselines3>=2.3
+sb3-contrib>=2.3
+
+# Configuración y reportes
+PyYAML>=6.0
+pandas>=2.2
+
+# L2 — red vial real de Monterrey (sólo demo/evaluación, nunca entrenamiento)
+osmnx>=1.9
+networkx>=3.2
+
+# Pruebas
+pytest>=8.0

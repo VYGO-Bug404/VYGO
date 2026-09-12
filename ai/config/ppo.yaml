@@ -1,0 +1,4 @@
+# Hiperparámetros de MaskablePPO (sb3-contrib) para vygo/train_ppo.py.
+# Pendientes de definir hasta tener un VygoEnv funcional y el currículum de §7 del
+# modelo matemático.
+algoritmo: MaskablePPO

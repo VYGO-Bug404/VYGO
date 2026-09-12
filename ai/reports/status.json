@@ -1,0 +1,72 @@
+{
+  "generado_en": "2026-09-12T08:44:23+00:00",
+  "bloque": "B0-andamiaje",
+  "commit": "d3e0f53",
+  "entorno": {
+    "nivel": null,
+    "config_hash": null,
+    "steps_por_segundo": null
+  },
+  "tests": {
+    "pasaron": 6,
+    "fallaron": 0,
+    "detalle_fallos": []
+  },
+  "invariantes": {
+    "violaciones_frescura": null,
+    "violaciones_capacidad": null,
+    "fifo_ok": null,
+    "contabilidad_ok": null,
+    "holdout_intacto": null
+  },
+  "baselines": {
+    "B0": {
+      "rho": 0,
+      "estado": "no_implementado"
+    },
+    "B1": {
+      "rho": 0,
+      "estado": "no_implementado"
+    },
+    "B2": {
+      "rho": 0,
+      "estado": "no_implementado"
+    },
+    "B3": {
+      "rho": 0,
+      "estado": "no_implementado"
+    }
+  },
+  "entrenamiento": {
+    "activo": false,
+    "algoritmo": null,
+    "semillas": [],
+    "pasos_totales": 0,
+    "pasos_objetivo": null,
+    "eta_minutos": null,
+    "curva": [],
+    "mejor_rho_val": null,
+    "etapa_curriculum": null
+  },
+  "evaluacion": {
+    "escenarios": null,
+    "pareada": null,
+    "agente": {
+      "rho_mediana": null,
+      "iqr": [
+        null,
+        null
+      ]
+    },
+    "vs_B2_pct": null,
+    "gap_vs_oraculo": null
+  },
+  "diagnostico_automatico": [],
+  "bloqueos": [
+    "vygo/env.py no está implementado: no existe entorno de simulación L0/L1.",
+    "vygo/geo.py, weather.py, generator.py son stubs sin cuerpo: no hay generador de escenarios.",
+    "sequencer.held_karp, insertion.eval_insertion y feasibility.action_mask tienen firma pero levantan NotImplementedError.",
+    "baselines B0-B3 no implementados; scenarios/test_50.pkl todavía no existe."
+  ],
+  "siguiente_paso_sugerido": "Implementar vygo/geo.py (rejilla L0) y vygo/generator.py (llegada de pedidos) para tener un VygoEnv mínimo y poder correr make bench."
+}

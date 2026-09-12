@@ -1,0 +1,4 @@
+# Nivel L0 — rejilla 20x20 Manhattan, velocidad constante, sin clima, sin preparación.
+# Objetivo: depurar código (docs/modelo-matematico.md §5.1). Hiperparámetros pendientes
+# de definir hasta que exista vygo/geo.py y vygo/env.py.
+nivel: L0

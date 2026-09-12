@@ -1,0 +1,4 @@
+# Nivel L1 — rejilla + zonas de densidad, tiempos de preparación, clima, difusión por
+# rondas. Objetivo: validar bundling. Aquí ocurre el entrenamiento (docs/modelo-matematico.md
+# §5.1). Hiperparámetros pendientes de definir hasta que exista vygo/generator.py.
+nivel: L1
