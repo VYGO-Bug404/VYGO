@@ -24,7 +24,7 @@ export const useOrdersStore = create<OrdersStore>((set, get) => ({
   completedOrders: ordersService.getCompletedOrders(),
   pendingOffer: null,
   currentEarningsPerHour: 192,
-  _nextRouteNumber: 4, // mocks already have 1, 2, 3
+  _nextRouteNumber: 1,
 
   setPendingOffer: (order) => set({ pendingOffer: order }),
 
