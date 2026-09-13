@@ -47,12 +47,7 @@ export const useDriverStore = create<DriverStore>((set, get) => ({
     set({
       status: 'online',
       shiftStartedAt: new Date(),
-    }),
-
-  endShift: () =>
-    set({
-      status: 'offline',
-      shiftStartedAt: null,
+      // Reset session counters at the START of each new shift
       todayEarnings: 0,
       earningsPerHour: 0,
       completedOrders: 0,
@@ -60,6 +55,13 @@ export const useDriverStore = create<DriverStore>((set, get) => ({
       vygoGainMxn: 0,
       vygoKmSaved: 0,
       vygoMinutesSaved: 0,
+    }),
+
+  endShift: () =>
+    set({
+      // Keep earnings data visible after shift ends — resets on next startShift
+      status: 'offline',
+      shiftStartedAt: null,
     }),
 
   setStatus: (status) => set({ status }),

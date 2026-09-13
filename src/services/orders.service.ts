@@ -122,16 +122,12 @@ export const ordersService = {
   },
 
   async fetchCompletedOrders(): Promise<Order[]> {
-    const todayStart = new Date()
-    todayStart.setHours(0, 0, 0, 0)
-
     const { data, error } = await supabase
       .from('pedidos_vista')
       .select('*')
       .eq('estado', 'entregado')
-      .gte('creado_en', todayStart.toISOString())
       .order('creado_en', { ascending: false })
-      .limit(50)
+      .limit(30)
     if (error) {
       console.error('fetchCompletedOrders:', error)
       return []
