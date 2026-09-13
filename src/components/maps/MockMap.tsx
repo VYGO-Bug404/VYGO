@@ -1,33 +1,28 @@
 import { useRef, useEffect, useState } from 'react'
 import {
   Map as MLMap,
+  Marker,
   AttributionControl,
   NavigationControl,
   LngLatBounds,
+  type GeoJSONSource,
   type StyleSpecification,
 } from 'maplibre-gl'
 import { cn } from '@/lib/utils'
 import type { Order } from '@/types/order'
-import {
-  MapRouteController,
-  type Parada,
-} from '@/lib/mapRouteController'
 
 export interface RouteGeoJSON {
   type: 'LineString'
   coordinates: [number, number][]
 }
 
-export interface MockMapProps {
+interface MockMapProps {
   activeOrders?: Order[]
   routeGeoJSON?: RouteGeoJSON | null
   className?: string
   showFullRoute?: boolean
   followDriver?: boolean
   fitToRoute?: boolean
-  controllerRef?: React.MutableRefObject<MapRouteController | null>
-  onAdvance?: (index: number) => void
-  onMetricsUpdate?: (m: { restanteM: number; desvioM: number }) => void
 }
 
 const MONTERREY: [number, number] = [-100.3161, 25.6866]
@@ -44,14 +39,19 @@ function getSavedPosition(): [number, number] {
 }
 
 function savePosition(lng: number, lat: number) {
-  try {
-    localStorage.setItem(LOCATION_KEY, JSON.stringify({ lng, lat, lon: lng }))
-  } catch {}
+  try { localStorage.setItem(LOCATION_KEY, JSON.stringify({ lng, lat, lon: lng })) } catch {}
+}
+
+const PLATFORM_COLORS: Record<string, string> = {
+  uber: '#334155',
+  rappi: '#EF4444',
+  didi: '#F97316',
 }
 
 const KEY = import.meta.env.VITE_MAPTILER_KEY || 'YCKX2ukadzz48kPBnfcK'
 
 function buildStyle(): StyleSpecification {
+  // Raster tiles — simpler and more reliable than fetching a style JSON
   const tiles = KEY
     ? [`https://api.maptiler.com/maps/dataviz/{z}/{x}/{y}.png?key=${KEY}`]
     : [
@@ -75,33 +75,6 @@ function buildStyle(): StyleSpecification {
   }
 }
 
-export function ordersToParadas(orders: Order[]): Parada[] {
-  const paradas: Parada[] = []
-  orders.forEach((o, idx) => {
-    if (o.status !== 'picked_up' && o.status !== 'delivered') {
-      paradas.push({
-        id: `P-${o.id}-${idx}`,
-        pedidoId: o.id,
-        tipo: 'P',
-        lat: o.pickup.lat,
-        lon: o.pickup.lng,
-      })
-    }
-  })
-  orders.forEach((o, idx) => {
-    if (o.status !== 'delivered') {
-      paradas.push({
-        id: `D-${o.id}-${idx}`,
-        pedidoId: o.id,
-        tipo: 'D',
-        lat: o.dropoff.lat,
-        lon: o.dropoff.lng,
-      })
-    }
-  })
-  return paradas
-}
-
 export function MockMap({
   activeOrders = [],
   routeGeoJSON,
@@ -109,23 +82,22 @@ export function MockMap({
   showFullRoute = false,
   followDriver = false,
   fitToRoute = false,
-  controllerRef: externalControllerRef,
-  onAdvance,
-  onMetricsUpdate,
 }: MockMapProps) {
   const wrapRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<MLMap | null>(null)
-  const controllerRef = useRef<MapRouteController | null>(null)
+  const markersRef = useRef<Marker[]>([])
+  const driverRef = useRef<Marker | null>(null)
   const watchRef = useRef<number | null>(null)
   const followDriverRef = useRef(followDriver)
+  const routeGeoJSONRef = useRef<RouteGeoJSON | null>(routeGeoJSON ?? null)
   const [ready, setReady] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
-    followDriverRef.current = followDriver
-  }, [followDriver])
+  // Keep refs in sync with props
+  useEffect(() => { followDriverRef.current = followDriver }, [followDriver])
+  useEffect(() => { routeGeoJSONRef.current = routeGeoJSON ?? null }, [routeGeoJSON])
 
-  // ── Inicialización del Mapa ──────────────────────────────
+  // ── Init map ──────────────────────────────────────────────
   useEffect(() => {
     const wrap = wrapRef.current
     if (!wrap || mapRef.current) return
@@ -154,15 +126,26 @@ export function MockMap({
 
         map.on('load', () => {
           map!.resize()
-          // Crear controlador MapRouteController
-          const ctrl = new MapRouteController(map!, {
-            onAdvance,
-            onMetricsUpdate,
+          map!.addSource('route', {
+            type: 'geojson',
+            data: { type: 'FeatureCollection', features: [] },
           })
-          controllerRef.current = ctrl
-          if (externalControllerRef) {
-            externalControllerRef.current = ctrl
-          }
+          // Casing blanco (halo)
+          map!.addLayer({
+            id: 'route-casing',
+            type: 'line',
+            source: 'route',
+            layout: { 'line-cap': 'round', 'line-join': 'round' },
+            paint: { 'line-color': '#FFFFFF', 'line-width': 8, 'line-opacity': 0.5 },
+          })
+          // Línea verde VYGO
+          map!.addLayer({
+            id: 'route-line',
+            type: 'line',
+            source: 'route',
+            layout: { 'line-cap': 'round', 'line-join': 'round' },
+            paint: { 'line-color': '#6FA800', 'line-width': 4 },
+          })
           setReady(true)
         })
 
@@ -173,13 +156,11 @@ export function MockMap({
       }
     }
 
+    // Wait one frame so CSS layout is applied before MapLibre reads dimensions
     raf = requestAnimationFrame(init)
 
     return () => {
       cancelAnimationFrame(raf)
-      controllerRef.current?.destroy()
-      controllerRef.current = null
-      if (externalControllerRef) externalControllerRef.current = null
       map?.remove()
       mapRef.current = null
       setReady(false)
@@ -187,61 +168,100 @@ export function MockMap({
     }
   }, [])
 
-  // ── Sincronizar Plan del Agente al Controlador ───────────
+  // ── Route line ────────────────────────────────────────────
   useEffect(() => {
-    const ctrl = controllerRef.current
-    if (!ctrl || !ready) return
+    const map = mapRef.current
+    if (!map || !ready) return
+    const src = map.getSource('route') as GeoJSONSource | undefined
+    if (!src) return
 
-    const [savedLng, savedLat] = getSavedPosition()
-    const currentGps = { lat: savedLat, lon: savedLng }
-    const paradas = ordersToParadas(activeOrders)
+    console.log('[VYGO map] setData coords:', routeGeoJSON?.coordinates?.length ?? 0)
+    src.setData(
+      routeGeoJSON
+        ? { type: 'Feature', geometry: routeGeoJSON, properties: {} }
+        : { type: 'FeatureCollection', features: [] }
+    )
 
-    if (paradas.length > 0) {
-      ctrl.setPlan(paradas, currentGps)
+    if (routeGeoJSON?.coordinates && routeGeoJSON.coordinates.length >= 2) {
+      const bounds = new LngLatBounds()
+      routeGeoJSON.coordinates.forEach(([lng, lat]) => bounds.extend([lng, lat]))
+      if (!bounds.isEmpty()) {
+        map.fitBounds(bounds, { padding: 80, maxZoom: 15, duration: 800 })
+      }
     }
+  }, [routeGeoJSON, ready])
+
+  // ── Pickup + Dropoff markers ──────────────────────────────
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map || !ready) return
+
+    markersRef.current.forEach((m) => m.remove())
+    markersRef.current = []
+
+    activeOrders.forEach((order, i) => {
+      const num = String(order.routeNumber ?? (i + 1))
+      const isFirst = (order.routeNumber ?? (i + 1)) === 1
+      const alreadyPickedUp = order.status === 'picked_up'
+
+      // ── PICKUP marker — solo si aún no fue recogido ──
+      if (!alreadyPickedUp) {
+        const pickupEl = document.createElement('div')
+        pickupEl.style.cssText = 'cursor:pointer;'
+
+        if (isFirst) {
+          // Círculo lima
+          pickupEl.innerHTML = `
+            <div style="width:34px;height:34px;background:#FFFFFF;border:2.5px solid #6FA800;
+              border-radius:50%;display:flex;align-items:center;justify-content:center;
+              font-family:Inter,sans-serif;font-weight:700;font-size:13px;color:#6FA800;
+              box-shadow:0 2px 12px rgba(111,168,0,0.35);">
+              ${num}
+            </div>`
+        } else {
+          // Triángulo lima (SVG)
+          pickupEl.innerHTML = `
+            <div style="position:relative;width:36px;height:34px;display:flex;
+              align-items:center;justify-content:center;">
+              <svg width="36" height="34" viewBox="0 0 36 34" style="position:absolute;top:0;left:0;">
+                <polygon points="18,2 1,33 35,33" fill="#FFFFFF"
+                  stroke="#6FA800" stroke-width="2.5" stroke-linejoin="round"/>
+              </svg>
+              <span style="position:relative;z-index:1;font-family:Inter,sans-serif;
+                font-weight:700;font-size:12px;color:#6FA800;margin-top:8px;">${num}</span>
+            </div>`
+        }
+
+        const pickup = new Marker({ element: pickupEl, anchor: 'center' })
+          .setLngLat([order.pickup.lng, order.pickup.lat])
+          .addTo(map)
+        markersRef.current.push(pickup)
+      }
+
+      // ── DROPOFF marker — óvalo naranja, siempre visible ──
+      const dropoffEl = document.createElement('div')
+      dropoffEl.style.cssText = 'cursor:pointer;'
+      dropoffEl.innerHTML = `
+        <div style="min-width:38px;height:26px;background:#C87000;
+          border-radius:13px;border:2px solid #FFFFFF;
+          display:flex;align-items:center;justify-content:center;
+          padding:0 10px;
+          font-family:Inter,sans-serif;font-weight:700;font-size:12px;color:#FFFFFF;
+          box-shadow:0 2px 12px rgba(200,112,0,0.4);">
+          ${num}
+        </div>`
+
+      const dropoff = new Marker({ element: dropoffEl, anchor: 'center' })
+        .setLngLat([order.dropoff.lng, order.dropoff.lat])
+        .addTo(map)
+      markersRef.current.push(dropoff)
+    })
   }, [activeOrders, ready])
 
-  // ── Escucha de GPS Real (watchPosition) ───────────────────
-  useEffect(() => {
-    if (!ready || !navigator.geolocation) return
-
-    const handleGpsUpdate = (pos: GeolocationPosition) => {
-      const { longitude: lng, latitude: lat } = pos.coords
-      savePosition(lng, lat)
-
-      // 1. Enviar lectura al controlador: recorte local con Turf (sin llamadas al servidor)
-      if (controllerRef.current) {
-        controllerRef.current.onPosicion({ lat, lon: lng })
-      }
-
-      // 2. Centrado suave si followDriver está activo
-      if (followDriverRef.current && mapRef.current) {
-        mapRef.current.easeTo({ center: [lng, lat], duration: 600, essential: true })
-      }
-    }
-
-    // Lectura inicial inmediata
-    navigator.geolocation.getCurrentPosition(handleGpsUpdate, () => {}, {
-      enableHighAccuracy: true,
-      timeout: 8000,
-    })
-
-    // Monitoreo continuo
-    const watchId = navigator.geolocation.watchPosition(
-      handleGpsUpdate,
-      () => {},
-      { enableHighAccuracy: true, maximumAge: 3000 }
-    )
-    watchRef.current = watchId
-
-    return () => {
-      if (watchRef.current !== null) {
-        navigator.geolocation.clearWatch(watchRef.current)
-      }
-    }
-  }, [ready])
-
-  // ── Fit Bounds inicial sobre paradas activas ──────────────
+  // ── Fit bounds to pickup/dropoff points ────────────────────
+  // Opt-in static route preview (e.g. completed order detail),
+  // where we want the whole A→B route framed instead of centering
+  // on the driver's last known position.
   useEffect(() => {
     const map = mapRef.current
     if (!map || !ready || (!fitToRoute && !showFullRoute) || activeOrders.length === 0) return
@@ -254,14 +274,66 @@ export function MockMap({
     })
 
     if (!bounds.isEmpty()) {
-      map.fitBounds(bounds, { padding: 80, duration: 600, maxZoom: 15 })
+      map.fitBounds(bounds, { padding: 64, duration: 600, maxZoom: 15 })
     }
   }, [activeOrders, ready, fitToRoute, showFullRoute])
+
+  // ── Driver GPS marker ─────────────────────────────────────
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map || !ready) return
+
+    const el = document.createElement('div')
+    el.style.cssText = 'width:32px;height:32px;position:relative;display:flex;align-items:center;justify-content:center;'
+    el.innerHTML = `
+      <div style="position:absolute;inset:0;background:#6FA800;border-radius:50%;opacity:0.3;animation:ping 2.5s cubic-bezier(0,0,0.2,1) infinite;"></div>
+      <div style="position:absolute;inset:4px;background:#6FA800;border-radius:50%;opacity:0.2;"></div>
+      <div style="position:relative;width:20px;height:20px;background:#6FA800;border-radius:50%;border:3px solid #FFFFFF;box-shadow:0 2px 8px rgba(0,0,0,0.45);display:flex;align-items:center;justify-content:center;">
+        <div style="width:5px;height:5px;background:#FFFFFF;border-radius:50%;"></div>
+      </div>
+    `
+
+    const marker = new Marker({ element: el, anchor: 'center' })
+      .setLngLat(getSavedPosition())
+      .addTo(map)
+    driverRef.current = marker
+
+    const applyPosition = (pos: GeolocationPosition) => {
+      const { longitude: lng, latitude: lat } = pos.coords
+      const lngLat: [number, number] = [lng, lat]
+      marker.setLngLat(lngLat)
+      savePosition(lng, lat)
+      if (followDriverRef.current && mapRef.current) {
+        mapRef.current.easeTo({ center: lngLat, duration: 600, essential: true })
+      }
+    }
+
+    if (navigator.geolocation) {
+      // Posición inicial inmediata — centra el mapa al instante
+      navigator.geolocation.getCurrentPosition(applyPosition, () => {}, {
+        enableHighAccuracy: true,
+        timeout: 8000,
+      })
+
+      // Actualizaciones continuas mientras conduce
+      watchRef.current = navigator.geolocation.watchPosition(
+        applyPosition,
+        () => {},
+        { enableHighAccuracy: true, maximumAge: 3000 }
+      )
+    }
+
+    return () => {
+      marker.remove()
+      if (watchRef.current !== null) navigator.geolocation.clearWatch(watchRef.current)
+    }
+  }, [ready])
 
   return (
     <div className={cn('relative overflow-hidden bg-[#dde3f0]', className)}>
       <div ref={wrapRef} className="w-full h-full" />
 
+      {/* Error state */}
       {error && (
         <div className="absolute inset-0 flex items-center justify-center bg-vygo-bg/90 z-10">
           <div className="text-center px-6">
@@ -270,6 +342,7 @@ export function MockMap({
           </div>
         </div>
       )}
+
 
       {!KEY && !error && (
         <div className="absolute bottom-10 left-1/2 -translate-x-1/2 z-10 pointer-events-none whitespace-nowrap">
