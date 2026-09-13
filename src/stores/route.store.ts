@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import type { ActiveRoute } from '@/types/route'
 import type { Order } from '@/types/order'
 import { routeService } from '@/services/route.service'
+import { fetchStreetRoute } from '@/services/routing.service'
 
 type RouteGeoJSON = { type: 'LineString'; coordinates: [number, number][] }
 
@@ -72,25 +73,27 @@ export const useRouteStore = create<RouteStore>((set, get) => ({
       return
     }
     const route = routeService.buildRoute(orders)
-    // Keep existing geometry from agent; only build straight-line fallback if missing
+
+    // If OSRM geometry already set (≥20 coords = real streets), keep it.
+    // Only re-fetch when the route changes after delivering an order.
     const existing = get().routeGeoJSON
-    if (!existing || existing.coordinates.length < 2) {
-      const coords: [number, number][] = []
-      try {
-        const raw = localStorage.getItem('vygo-last-position')
-        if (raw) {
-          const p = JSON.parse(raw)
-          if (typeof p.lng === 'number' && typeof p.lat === 'number') coords.push([p.lng, p.lat])
-        }
-      } catch {}
-      orders.forEach((o) => {
-        if (o.status !== 'picked_up') coords.push([o.pickup.lng, o.pickup.lat])
-        coords.push([o.dropoff.lng, o.dropoff.lat])
-      })
-      set({ activeRoute: route, currentStopIndex: 0, routeGeoJSON: coords.length >= 2 ? { type: 'LineString', coordinates: coords } : null })
-    } else {
+    if (existing && existing.coordinates.length >= 20) {
       set({ activeRoute: route, currentStopIndex: 0 })
+      return
     }
+
+    // No valid geometry yet — fetch OSRM for remaining stops (no driver pos)
+    const waypoints: [number, number][] = orders.flatMap((o): [number, number][] => {
+      const pts: [number, number][] = []
+      if (o.status !== 'picked_up') pts.push([o.pickup.lng, o.pickup.lat])
+      pts.push([o.dropoff.lng, o.dropoff.lat])
+      return pts
+    })
+
+    set({ activeRoute: route, currentStopIndex: 0 })
+    fetchStreetRoute(waypoints).then((geo) => {
+      set({ routeGeoJSON: geo ?? (waypoints.length >= 2 ? { type: 'LineString', coordinates: waypoints } : null) })
+    })
   },
 
   advanceStop: () => {

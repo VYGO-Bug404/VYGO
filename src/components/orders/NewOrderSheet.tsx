@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { formatCurrency, formatDistance, formatMinutes } from '@/lib/utils'
 import { cn } from '@/lib/utils'
 import { decidir, politicaLabel } from '@/services/agent.service'
+import { fetchStreetRoute } from '@/services/routing.service'
 import type { RespuestaDecidir, DecisionOferta } from '@/lib/vygoAgent'
 import type { Order } from '@/types/order'
 
@@ -117,24 +118,21 @@ export function NewOrderSheet({ order }: NewOrderSheetProps) {
     setAccepting(true)
     setAccepted(true)
 
-    // Use geometry from agent (A* real streets); fallback to straight lines
-    const geo = agentResp?.plan?.geometria
-    if (geo && geo.coordinates?.length > 1) {
-      setRouteGeoJSON(geo)
-    } else {
-      let pos: [number, number] = [-100.3094, 25.6714]
-      try {
-        const raw = localStorage.getItem('vygo-last-position')
-        if (raw) {
-          const p = JSON.parse(raw)
-          if (typeof p.lat === 'number' && typeof p.lng === 'number') pos = [p.lng, p.lat]
-        }
-      } catch {}
-      setRouteGeoJSON({
-        type: 'LineString',
-        coordinates: [pos, [order.pickup.lng, order.pickup.lat], [order.dropoff.lng, order.dropoff.lat]],
-      })
-    }
+    // Build stop waypoints — NO driver position to avoid triangle artifacts.
+    // Sequence: existing active stops → new pickup → new dropoff.
+    const waypoints: [number, number][] = [
+      ...activeOrders.flatMap((o): [number, number][] => {
+        const pts: [number, number][] = []
+        if (o.status !== 'picked_up') pts.push([o.pickup.lng, o.pickup.lat])
+        pts.push([o.dropoff.lng, o.dropoff.lat])
+        return pts
+      }),
+      [order.pickup.lng, order.pickup.lat],
+      [order.dropoff.lng, order.dropoff.lat],
+    ]
+
+    const streetGeo = await fetchStreetRoute(waypoints)
+    setRouteGeoJSON(streetGeo ?? { type: 'LineString', coordinates: waypoints })
 
     await new Promise((r) => setTimeout(r, 600))
     acceptOffer(order, agentResp?.plan)
