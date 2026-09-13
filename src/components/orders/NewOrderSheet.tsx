@@ -118,8 +118,6 @@ export function NewOrderSheet({ order }: NewOrderSheetProps) {
     setAccepting(true)
     setAccepted(true)
 
-    // Build stop waypoints — NO driver position to avoid triangle artifacts.
-    // Sequence: existing active stops → new pickup → new dropoff.
     const waypoints: [number, number][] = [
       ...activeOrders.flatMap((o): [number, number][] => {
         const pts: [number, number][] = []
@@ -131,11 +129,14 @@ export function NewOrderSheet({ order }: NewOrderSheetProps) {
       [order.dropoff.lng, order.dropoff.lat],
     ]
 
-    const streetGeo = await fetchStreetRoute(waypoints)
-    setRouteGeoJSON(streetGeo ?? { type: 'LineString', coordinates: waypoints })
-
+    // Aceptar inmediatamente — no bloquear esperando OSRM
     await new Promise((r) => setTimeout(r, 600))
     acceptOffer(order, agentResp?.plan)
+
+    // Fetch OSRM en background — actualiza ruta cuando llega sin bloquear el flujo
+    fetchStreetRoute(waypoints).then((streetGeo) => {
+      if (streetGeo) setRouteGeoJSON(streetGeo)
+    })
   }
 
   return (
