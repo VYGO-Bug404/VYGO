@@ -31,8 +31,8 @@ export function EarningsPage() {
   // Agrupar ganancias por hora usando deliveredAt
   const hourMap: Record<number, { earnings: number; orders: number }> = {}
   for (const o of completedOrdersList) {
-    if (!o.deliveredAt) continue
-    const h = o.deliveredAt.getHours()
+    const timestamp = o.deliveredAt ?? o.createdAt
+    const h = timestamp.getHours()
     if (!hourMap[h]) hourMap[h] = { earnings: 0, orders: 0 }
     hourMap[h].earnings += o.earnings
     hourMap[h].orders += 1

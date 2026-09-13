@@ -102,8 +102,8 @@ export const ordersService = {
       .from('pedidos_vista')
       .select('*')
       .eq('estado', 'entregado')
-      .gte('entregado_en', todayStart.toISOString())
-      .order('entregado_en', { ascending: false })
+      .gte('creado_en', todayStart.toISOString())
+      .order('creado_en', { ascending: false })
       .limit(50)
     if (error) {
       console.error('fetchCompletedOrders:', error)
