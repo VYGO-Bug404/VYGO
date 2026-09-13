@@ -13,6 +13,13 @@ function isoNow(offsetMin = 0) {
 }
 
 function orderToOferta(offer: Order) {
+  // theta_frescura_min: rango del backend 25-35 min, basado en estimatedMinutes
+  const theta = Math.min(35, Math.max(25, Math.round(25 + (offer.estimatedMinutes ?? 10) * 0.4)))
+  // espera cocina: 3-6.5 min variable por distancia
+  const cocina = Math.round(3 + (offer.distanceKm ?? 2) * 0.5)
+  // surge activo si el pedido viene de La Lucha / Barrio Antiguo (precio ≥ $80)
+  const isSurge = offer.earnings >= 80 && offer.pickup.neighborhood === 'Centro'
+
   return {
     oferta_id: offer.id,
     pedido_id: offer.id,
@@ -20,9 +27,11 @@ function orderToOferta(offer: Order) {
     origen: { lat: offer.pickup.lat, lon: offer.pickup.lng },
     destino: { lat: offer.dropoff.lat, lon: offer.dropoff.lng },
     precio_mxn: offer.earnings,
-    listo_estimado_en: isoNow(3),  // listo en ~3 min por defecto
-    limite_en: isoNow((offer.estimatedMinutes ?? 30) + 25),
+    listo_estimado_en: isoNow(cocina),
+    limite_en: isoNow((offer.estimatedMinutes ?? 30) + 40),
+    theta_frescura_min: theta,
     anillo: 1,
+    ...(isSurge ? { contexto: { tipo_producto: 'caliente', surge: true } } : {}),
   }
 }
 
@@ -157,7 +166,10 @@ export async function decidir(
         ofertas: [orderToOferta(offer)],
         contexto: {
           clima: 'normal',
-          evento_activo: null,
+          // Activa surge si alguna oferta viene de zona centro con precio ≥ $80
+          evento_activo: offer.earnings >= 80 && offer.pickup.neighborhood === 'Centro'
+            ? 'surge'
+            : null,
         },
       }
 
