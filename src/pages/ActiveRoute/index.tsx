@@ -55,66 +55,8 @@ export function ActiveRoutePage() {
     return () => navigator.geolocation.clearWatch(id)
   }, [])
 
-  const recalculatingRef = useRef(false)
-
-  // Recalcula la línea de A* conectando SIEMPRE desde la posición del conductor
-  // hacia el siguiente objetivo prioritario (recogida y luego entrega)
-  const recalculateRoute = useCallback(async (pos: { lat: number; lng: number }) => {
-    if (activeOrders.length === 0) {
-      setRouteGeoJSON(null)
-      return
-    }
-
-    const destinations: { lat: number; lng: number }[] = []
-    if (activeRoute?.stops && activeRoute.stops.length > currentStopIndex) {
-      for (let i = currentStopIndex; i < activeRoute.stops.length; i++) {
-        const stop = activeRoute.stops[i]
-        const pt = stop.type === 'pickup' ? stop.order.pickup : stop.order.dropoff
-        if (pt) destinations.push({ lat: pt.lat, lng: pt.lng })
-      }
-    } else {
-      activeOrders.forEach((o) => {
-        if (o.status !== 'picked_up' && o.status !== 'delivered') {
-          destinations.push({ lat: o.pickup.lat, lng: o.pickup.lng })
-        }
-        if (o.status !== 'delivered') {
-          destinations.push({ lat: o.dropoff.lat, lng: o.dropoff.lng })
-        }
-      })
-    }
-
-    if (destinations.length === 0) {
-      setRouteGeoJSON(null)
-      return
-    }
-
-    if (recalculatingRef.current) return
-    recalculatingRef.current = true
-
-    try {
-      const routeData = await obtenerRutaAstar(pos, destinations)
-      // Solo actualizar si la ruta devuelta tiene densidad vial real (A* > 5 puntos)
-      // para evitar que un fallback recto sobreescriba una ruta existente de alta fidelidad
-      if (routeData?.coordinates && routeData.coordinates.length > 5) {
-        setRouteGeoJSON({
-          type: 'LineString',
-          coordinates: routeData.coordinates,
-        })
-      }
-    } catch (err) {
-      console.warn('[ActiveRoute] error al recalcular ruta A*:', err)
-    } finally {
-      recalculatingRef.current = false
-    }
-  }, [activeOrders, activeRoute, currentStopIndex, setRouteGeoJSON])
-
-  // Solo recalcular si NO existe ya una ruta vial cargada en el store
-  useEffect(() => {
-    const existing = useRouteStore.getState().routeGeoJSON
-    if (!existing || !existing.coordinates || existing.coordinates.length < 10) {
-      recalculateRoute(driverPos)
-    }
-  }, [currentStopIndex, activeOrders.length])
+  const controllerRef = useRef<import('@/lib/mapRouteController').MapRouteController | null>(null)
+  const [liveDistanceM, setLiveDistanceM] = useState<number | null>(null)
 
   const { tryEndShift, confirming, confirmEnd, cancelConfirm } = useEndShift()
   const todayEarnings = useDriverStore((s) => s.todayEarnings)
@@ -135,11 +77,15 @@ export function ActiveRoutePage() {
     ? haversineKm(driverPos.lat, driverPos.lng, targetCoords.lat, targetCoords.lng)
     : 0
 
-  const distLabel = distKmToStop < 1.0
-    ? `${Math.max(50, Math.round(distKmToStop * 1000))} m`
-    : `${distKmToStop.toFixed(1)} km`
+  const distLabel = liveDistanceM !== null
+    ? liveDistanceM < 1000
+      ? `${Math.max(10, Math.round(liveDistanceM))} m`
+      : `${(liveDistanceM / 1000).toFixed(1)} km`
+    : distKmToStop < 1.0
+      ? `${Math.max(50, Math.round(distKmToStop * 1000))} m`
+      : `${distKmToStop.toFixed(1)} km`
 
-  const minutesToStop = Math.max(1, Math.round(distKmToStop * 2.2))
+  const minutesToStop = Math.max(1, Math.round((liveDistanceM !== null ? liveDistanceM / 1000 : distKmToStop) * 2.2))
   const etaDate = new Date(Date.now() + minutesToStop * 60000)
   const etaTimeStr = formatTime(etaDate)
 
@@ -155,13 +101,16 @@ export function ActiveRoutePage() {
     if (primaryOrder) {
       advanceOrder(primaryOrder.id)
       advanceStop()
-      // Disparar recalculación inmediata de la línea de A* desde la posición
-      // actual del conductor hacia el siguiente punto prioritario
-      setTimeout(() => {
-        recalculateRoute(driverPos)
-      }, 50)
+      controllerRef.current?.avanzar()
     }
   }
+
+  const handleControllerAdvance = useCallback((_idx: number) => {
+    if (primaryOrder) {
+      advanceOrder(primaryOrder.id)
+      advanceStop()
+    }
+  }, [primaryOrder, advanceOrder, advanceStop])
 
   const actionLabel = primaryOrder
     ? (STATUS_LABEL[primaryOrder.status] ?? 'Pedido entregado')
@@ -302,7 +251,9 @@ export function ActiveRoutePage() {
       {/* MAP — true full screen, behind all overlays */}
       <MockMap
         activeOrders={activeOrders}
-        routeGeoJSON={routeGeoJSON}
+        controllerRef={controllerRef}
+        onAdvance={handleControllerAdvance}
+        onMetricsUpdate={(m) => setLiveDistanceM(m.restanteM)}
         className="absolute inset-0 w-full h-full rounded-none"
         showFullRoute
         followDriver

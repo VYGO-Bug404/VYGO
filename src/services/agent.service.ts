@@ -293,34 +293,55 @@ export function politicaLabel(p: Politica): string {
 
 export async function obtenerRutaAstar(
   origen: { lat: number; lon?: number; lng?: number },
-  destinos: { lat: number; lon?: number; lng?: number }[]
+  destinos: { lat: number; lon?: number; lng?: number; id?: string }[]
 ): Promise<{ coordinates: [number, number][]; distanceKm: number; durationMin: number } | null> {
   if (!destinos || destinos.length === 0) return null
   const pOrig = { lat: origen.lat, lon: (origen.lon ?? origen.lng) as number }
-  const pDests = destinos.map((d) => ({ lat: d.lat, lon: (d.lon ?? d.lng) as number }))
+  const pDests = destinos.map((d, i) => ({
+    id: d.id ?? `d_${i}`,
+    lat: d.lat,
+    lon: (d.lon ?? d.lng) as number,
+  }))
 
-  const targetUrl = AGENT_URL || 'https://vygo-backend.onrender.com'
-  try {
-    const res = await Promise.race([
-      fetch(`${targetUrl}/ruteo`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ origen: pOrig, destinos: pDests }),
-      }),
-      new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), 5000)),
-    ])
-    if (res.ok) {
-      const data = await res.json()
-      if (data.geometria?.coordinates && data.geometria.coordinates.length >= 2) {
-        return {
-          coordinates: data.geometria.coordinates,
-          distanceKm: data.distancia_km,
-          durationMin: data.duracion_min,
+  const baseUrls = [
+    import.meta.env.VITE_AGENT_URL,
+    'http://localhost:8000',
+    'https://vygo-backend.onrender.com',
+  ].filter(Boolean) as string[]
+
+  for (const baseUrl of Array.from(new Set(baseUrls))) {
+    try {
+      const url = `${baseUrl.replace(/\/$/, '')}/ruta`
+      const res = await Promise.race([
+        fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ origen: pOrig, destinos: pDests }),
+        }),
+        new Promise<Response>((_, reject) => setTimeout(() => reject(new Error('timeout')), 5000)),
+      ])
+      if (res.ok) {
+        const data = await res.json()
+        if (data.tramos && data.tramos.length > 0) {
+          const allCoords: [number, number][] = []
+          for (const tramo of data.tramos) {
+            const trCoords = tramo.geometria?.coordinates ?? []
+            if (allCoords.length > 0 && trCoords.length > 0) {
+              allCoords.push(...trCoords.slice(1))
+            } else {
+              allCoords.push(...trCoords)
+            }
+          }
+          return {
+            coordinates: allCoords,
+            distanceKm: Number(((data.totales?.metros ?? 0) / 1000).toFixed(2)),
+            durationMin: Math.max(1, Math.round((data.totales?.segundos ?? 0) / 60)),
+          }
         }
       }
+    } catch (err) {
+      // Intentar siguiente URL
     }
-  } catch (err) {
-    console.warn('[agent.service] /ruteo fallback a interpolación local:', err)
   }
 
   // Fallback local interpolado con curvatura suave para que el mapa NUNCA quede vacío
