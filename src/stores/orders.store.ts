@@ -32,6 +32,27 @@ export const useOrdersStore = create<OrdersStore>((set, get) => ({
       ordersService.loadOfferPool(),
     ])
     set({ completedOrders: completed })
+
+    // Sincronizar driver.store con los pedidos de HOY desde Supabase
+    const now = new Date()
+    const todayOrders = completed.filter((o) => {
+      const d = o.deliveredAt ?? o.createdAt
+      return (
+        d.getFullYear() === now.getFullYear() &&
+        d.getMonth() === now.getMonth() &&
+        d.getDate() === now.getDate()
+      )
+    })
+    if (todayOrders.length > 0) {
+      const totalEarnings = todayOrders.reduce((s, o) => s + o.earnings, 0)
+      const totalMinutes = todayOrders.reduce((s, o) => s + (o.estimatedMinutes ?? 20), 0)
+      const perHour = totalMinutes > 0 ? Math.round(totalEarnings / (totalMinutes / 60)) : 0
+      useDriverStore.getState().syncTelemetria({
+        rho_actual_mxn_h: perHour,
+        ganancia_turno_mxn: totalEarnings,
+        pedidos_entregados: todayOrders.length,
+      })
+    }
   },
 
   setPendingOffer: (order) => set({ pendingOffer: order }),
