@@ -186,21 +186,52 @@ export function MockMap({
     if (!map || !ready) return
     const src = map.getSource('route') as GeoJSONSource | undefined
     if (!src) return
-    src.setData(
-      routeGeoJSON
-        ? { type: 'Feature', geometry: routeGeoJSON, properties: {} }
-        : { type: 'FeatureCollection', features: [] }
-    )
 
-    // FIT CAMERA TO ROUTE: Frames the full street route so the courier sees it immediately
-    if (routeGeoJSON && routeGeoJSON.coordinates && routeGeoJSON.coordinates.length > 1) {
+    let validFeature = false
+    let activeCoords: [number, number][] = []
+
+    if (routeGeoJSON?.coordinates && routeGeoJSON.coordinates.length >= 2) {
+      activeCoords = routeGeoJSON.coordinates
+      validFeature = true
+    } else if (activeOrders.length > 0) {
+      // Fallback inmediato para que la línea jamás desaparezca en el mapa
+      const saved = getSavedPosition()
+      const fallbackCoords: [number, number][] = [saved]
+      activeOrders.forEach((o) => {
+        if (o.status !== 'picked_up') fallbackCoords.push([o.pickup.lng, o.pickup.lat])
+        fallbackCoords.push([o.dropoff.lng, o.dropoff.lat])
+      })
+      if (fallbackCoords.length >= 2) {
+        activeCoords = fallbackCoords
+        validFeature = true
+      }
+    }
+
+    if (validFeature && activeCoords.length >= 2) {
+      src.setData({
+        type: 'FeatureCollection',
+        features: [
+          {
+            type: 'Feature',
+            geometry: {
+              type: 'LineString',
+              coordinates: activeCoords,
+            },
+            properties: {},
+          },
+        ],
+      })
+
+      // Enmarcar cámara para que el repartidor vea el trayecto completo
       const bounds = new LngLatBounds()
-      routeGeoJSON.coordinates.forEach(([lng, lat]) => bounds.extend([lng, lat]))
+      activeCoords.forEach(([lng, lat]) => bounds.extend([lng, lat]))
       if (!bounds.isEmpty()) {
         map.fitBounds(bounds, { padding: 80, maxZoom: 15, duration: 800 })
       }
+    } else {
+      src.setData({ type: 'FeatureCollection', features: [] })
     }
-  }, [routeGeoJSON, ready])
+  }, [routeGeoJSON, activeOrders, ready])
 
   // ── Pickup + Dropoff markers ──────────────────────────────
   useEffect(() => {

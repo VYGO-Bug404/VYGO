@@ -3,7 +3,7 @@ import type { Order } from '@/types/order'
 import { useDriverStore } from '@/stores/driver.store'
 import { useAuthStore } from '@/stores/auth.store'
 
-const AGENT_URL = import.meta.env.VITE_AGENT_URL
+const AGENT_URL = import.meta.env.VITE_AGENT_URL || (import.meta.env.PROD ? 'https://vygo-backend.onrender.com' : 'http://localhost:8000')
 const TIMEOUT_MS = 12000
 // Tasa de referencia MTY cuando el repartidor aún no ha completado pedidos
 const BASELINE_RHO_MXN_H = 120
@@ -125,7 +125,33 @@ function b2Fallback(offer: Order, rhoActual: number, posicion?: { lat: number; l
     }],
     plan: {
       viaje_id: `plan-${offer.id}`,
-      paradas: [],
+      paradas: [
+        {
+          orden: 1,
+          tipo: 'recoleccion',
+          pedido_id: offer.id,
+          app: offer.platform,
+          punto: { lat: offer.pickup.lat, lon: offer.pickup.lng },
+          direccion: offer.pickup.address,
+          eta: isoNow(Math.max(2, Math.round((d1 / 28) * 60))),
+          eta_min: Math.max(2, Math.round((d1 / 28) * 60)),
+          espera_estimada_min: 3,
+          holgura_frescura_min: 25,
+          estado: 'pendiente',
+        },
+        {
+          orden: 2,
+          tipo: 'entrega',
+          pedido_id: offer.id,
+          app: offer.platform,
+          punto: { lat: offer.dropoff.lat, lon: offer.dropoff.lng },
+          direccion: offer.dropoff.address,
+          eta: isoNow(deltaTiempo),
+          eta_min: deltaTiempo,
+          holgura_frescura_min: 20,
+          estado: 'pendiente',
+        },
+      ],
       geometria: { type: 'LineString', coordinates: coords },
       resumen: {
         paradas_totales: 2,
@@ -264,3 +290,58 @@ export function politicaLabel(p: Politica): string {
   }
   return labels[p] ?? p
 }
+
+export async function obtenerRutaAstar(
+  origen: { lat: number; lon?: number; lng?: number },
+  destinos: { lat: number; lon?: number; lng?: number }[]
+): Promise<{ coordinates: [number, number][]; distanceKm: number; durationMin: number } | null> {
+  if (!destinos || destinos.length === 0) return null
+  const pOrig = { lat: origen.lat, lon: (origen.lon ?? origen.lng) as number }
+  const pDests = destinos.map((d) => ({ lat: d.lat, lon: (d.lon ?? d.lng) as number }))
+
+  const targetUrl = AGENT_URL || 'https://vygo-backend.onrender.com'
+  try {
+    const res = await Promise.race([
+      fetch(`${targetUrl}/ruteo`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ origen: pOrig, destinos: pDests }),
+      }),
+      new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), 5000)),
+    ])
+    if (res.ok) {
+      const data = await res.json()
+      if (data.geometria?.coordinates && data.geometria.coordinates.length >= 2) {
+        return {
+          coordinates: data.geometria.coordinates,
+          distanceKm: data.distancia_km,
+          durationMin: data.duracion_min,
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('[agent.service] /ruteo fallback a interpolación local:', err)
+  }
+
+  // Fallback local interpolado con curvatura suave para que el mapa NUNCA quede vacío
+  const coords: [number, number][] = [[pOrig.lon, pOrig.lat]]
+  let distKm = 0
+  let durMin = 0
+  let prev = pOrig
+  for (const d of pDests) {
+    const dKm = haversineM(prev.lat, prev.lon, d.lat, d.lon) * 1.35
+    distKm += dKm
+    durMin += Math.max(2, Math.round((dKm / 28) * 60))
+    // Puntos de interpolación intermedia para suavizar el trazado
+    coords.push([prev.lon + (d.lon - prev.lon) * 0.33, prev.lat + (d.lat - prev.lat) * 0.33])
+    coords.push([prev.lon + (d.lon - prev.lon) * 0.66, prev.lat + (d.lat - prev.lat) * 0.66])
+    coords.push([d.lon, d.lat])
+    prev = d
+  }
+  return {
+    coordinates: coords,
+    distanceKm: Number(distKm.toFixed(1)),
+    durationMin: Math.round(durMin),
+  }
+}
+

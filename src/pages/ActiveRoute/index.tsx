@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ArrowLeft, ChevronRight, LogOut, TrendingUp, Clock, Package, Zap, Store, MapPin, Navigation, ExternalLink } from 'lucide-react'
 import { useOrdersStore } from '@/stores/orders.store'
 import { useRouteStore } from '@/stores/route.store'
 import { useDriverStore } from '@/stores/driver.store'
+import { obtenerRutaAstar } from '@/services/agent.service'
 
 import { useActiveRoute } from '@/hooks/useActiveRoute'
 import { useEndShift } from '@/hooks/useEndShift'
@@ -26,6 +27,8 @@ export function ActiveRoutePage() {
   const advanceOrder = useOrdersStore((s) => s.advanceOrder)
   const advanceStop = useRouteStore((s) => s.advanceStop)
   const routeGeoJSON = useRouteStore((s) => s.routeGeoJSON)
+  const setRouteGeoJSON = useRouteStore((s) => s.setRouteGeoJSON)
+  const activeRoute = useRouteStore((s) => s.activeRoute)
   const { currentStop, nextStop, totalStops } = useActiveRoute()
   const currentStopIndex = useRouteStore((s) => s.currentStopIndex)
 
@@ -51,6 +54,62 @@ export function ActiveRoutePage() {
     )
     return () => navigator.geolocation.clearWatch(id)
   }, [])
+
+  const recalculatingRef = useRef(false)
+
+  // Recalcula la línea de A* conectando SIEMPRE desde la posición del conductor
+  // hacia el siguiente objetivo prioritario (recogida y luego entrega)
+  const recalculateRoute = useCallback(async (pos: { lat: number; lng: number }) => {
+    if (activeOrders.length === 0) {
+      setRouteGeoJSON(null)
+      return
+    }
+
+    const destinations: { lat: number; lng: number }[] = []
+    if (activeRoute?.stops && activeRoute.stops.length > currentStopIndex) {
+      for (let i = currentStopIndex; i < activeRoute.stops.length; i++) {
+        const stop = activeRoute.stops[i]
+        const pt = stop.type === 'pickup' ? stop.order.pickup : stop.order.dropoff
+        if (pt) destinations.push({ lat: pt.lat, lng: pt.lng })
+      }
+    } else {
+      activeOrders.forEach((o) => {
+        if (o.status !== 'picked_up' && o.status !== 'delivered') {
+          destinations.push({ lat: o.pickup.lat, lng: o.pickup.lng })
+        }
+        if (o.status !== 'delivered') {
+          destinations.push({ lat: o.dropoff.lat, lng: o.dropoff.lng })
+        }
+      })
+    }
+
+    if (destinations.length === 0) {
+      setRouteGeoJSON(null)
+      return
+    }
+
+    if (recalculatingRef.current) return
+    recalculatingRef.current = true
+
+    try {
+      const routeData = await obtenerRutaAstar(pos, destinations)
+      if (routeData?.coordinates && routeData.coordinates.length >= 2) {
+        setRouteGeoJSON({
+          type: 'LineString',
+          coordinates: routeData.coordinates,
+        })
+      }
+    } catch (err) {
+      console.warn('[ActiveRoute] error al recalcular ruta A*:', err)
+    } finally {
+      recalculatingRef.current = false
+    }
+  }, [activeOrders, activeRoute, currentStopIndex, setRouteGeoJSON])
+
+  // Recalcular ruta al montar la pantalla o cuando cambia la parada en curso
+  useEffect(() => {
+    recalculateRoute(driverPos)
+  }, [currentStopIndex, activeOrders.length])
 
   const { tryEndShift, confirming, confirmEnd, cancelConfirm } = useEndShift()
   const todayEarnings = useDriverStore((s) => s.todayEarnings)
@@ -91,6 +150,11 @@ export function ActiveRoutePage() {
     if (primaryOrder) {
       advanceOrder(primaryOrder.id)
       advanceStop()
+      // Disparar recalculación inmediata de la línea de A* desde la posición
+      // actual del conductor hacia el siguiente punto prioritario
+      setTimeout(() => {
+        recalculateRoute(driverPos)
+      }, 50)
     }
   }
 
