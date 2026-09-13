@@ -8,7 +8,6 @@ import { Button } from '@/components/ui/button'
 import { formatCurrency, formatDistance, formatMinutes } from '@/lib/utils'
 import { cn } from '@/lib/utils'
 import { decidir, politicaLabel } from '@/services/agent.service'
-import { fetchStreetRoute } from '@/services/routing.service'
 import type { RespuestaDecidir, DecisionOferta } from '@/lib/vygoAgent'
 import type { Order } from '@/types/order'
 
@@ -118,25 +117,27 @@ export function NewOrderSheet({ order }: NewOrderSheetProps) {
     setAccepting(true)
     setAccepted(true)
 
-    const waypoints: [number, number][] = [
-      ...activeOrders.flatMap((o): [number, number][] => {
-        const pts: [number, number][] = []
-        if (o.status !== 'picked_up') pts.push([o.pickup.lng, o.pickup.lat])
-        pts.push([o.dropoff.lng, o.dropoff.lat])
-        return pts
-      }),
-      [order.pickup.lng, order.pickup.lat],
-      [order.dropoff.lng, order.dropoff.lat],
-    ]
+    // Use geometry from agent (A* real streets); fallback to straight lines
+    const geo = agentResp?.plan?.geometria
+    if (geo && geo.coordinates?.length > 1) {
+      setRouteGeoJSON(geo)
+    } else {
+      let pos: [number, number] = [-100.3094, 25.6714]
+      try {
+        const raw = localStorage.getItem('vygo-last-position')
+        if (raw) {
+          const p = JSON.parse(raw)
+          if (typeof p.lat === 'number' && typeof p.lng === 'number') pos = [p.lng, p.lat]
+        }
+      } catch {}
+      setRouteGeoJSON({
+        type: 'LineString',
+        coordinates: [pos, [order.pickup.lng, order.pickup.lat], [order.dropoff.lng, order.dropoff.lat]],
+      })
+    }
 
-    // Aceptar inmediatamente — no bloquear esperando OSRM
     await new Promise((r) => setTimeout(r, 600))
     acceptOffer(order, agentResp?.plan)
-
-    // Fetch OSRM en background — actualiza ruta cuando llega sin bloquear el flujo
-    fetchStreetRoute(waypoints).then((streetGeo) => {
-      if (streetGeo) setRouteGeoJSON(streetGeo)
-    })
   }
 
   return (
