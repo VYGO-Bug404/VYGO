@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { Map, AlertCircle, ChevronUp } from 'lucide-react'
 import { useOrdersStore } from '@/stores/orders.store'
@@ -6,6 +6,7 @@ import { PageHeader } from '@/components/layout/PageHeader'
 import { PlatformBadge } from '@/components/PlatformBadge'
 import { OrderTimeline } from '@/components/orders/OrderTimeline'
 import { MockMap, type RouteGeoJSON } from '@/components/maps/MockMap'
+import { fetchStreetRoute } from '@/services/routing.service'
 import { Button } from '@/components/ui/button'
 import { formatCurrency, formatCurrencyDecimal, formatDistance, formatMinutes } from '@/lib/utils'
 import { cn } from '@/lib/utils'
@@ -41,13 +42,23 @@ export function OrderDetailPage() {
   const statusConfig = STATUS_LABELS[order.status] ?? { label: order.status, className: 'bg-vygo-secondary/15 text-vygo-secondary border-vygo-secondary/20' }
   const earningsPerKm = order.earningsPerKm ?? (order.earnings / order.distanceKm)
 
-  const routeGeoJSON: RouteGeoJSON = {
+  const [routeGeoJSON, setRouteGeoJSON] = useState<RouteGeoJSON>({
     type: 'LineString',
     coordinates: [
       [order.pickup.lng, order.pickup.lat],
       [order.dropoff.lng, order.dropoff.lat],
     ],
-  }
+  })
+
+  useEffect(() => {
+    if (!showMap) return
+    fetchStreetRoute([
+      [order.pickup.lng, order.pickup.lat],
+      [order.dropoff.lng, order.dropoff.lat],
+    ]).then((geo) => {
+      if (geo && geo.coordinates.length > 2) setRouteGeoJSON(geo)
+    })
+  }, [showMap, order.pickup.lng, order.pickup.lat, order.dropoff.lng, order.dropoff.lat])
 
   return (
     <div className="flex flex-col min-h-full">

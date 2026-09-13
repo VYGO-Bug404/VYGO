@@ -111,7 +111,7 @@ export function ActiveRoutePage() {
   // Solo recalcular si NO existe ya una ruta vial cargada en el store
   useEffect(() => {
     const existing = useRouteStore.getState().routeGeoJSON
-    if (!existing || !existing.coordinates || existing.coordinates.length <= 2) {
+    if (!existing || !existing.coordinates || existing.coordinates.length < 10) {
       recalculateRoute(driverPos)
     }
   }, [currentStopIndex, activeOrders.length])
