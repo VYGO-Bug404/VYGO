@@ -175,6 +175,7 @@ export function MockMap({
     const src = map.getSource('route') as GeoJSONSource | undefined
     if (!src) return
 
+    console.log('[VYGO map] setData coords:', routeGeoJSON?.coordinates?.length ?? 0)
     src.setData(
       routeGeoJSON
         ? { type: 'Feature', geometry: routeGeoJSON, properties: {} }

@@ -72,9 +72,13 @@ export function NewOrderSheet({ order }: NewOrderSheetProps) {
     decidir(order, rhoActual, pos, activeOrders).then((resp) => {
       setAgentResp(resp)
       setLoading(false)
-      // Preview proposed A* route on map behind the sheet
-      if (resp?.plan?.geometria?.coordinates && resp.plan.geometria.coordinates.length > 1) {
-        setRouteGeoJSON(resp.plan.geometria)
+      const geo = resp?.plan?.geometria
+      console.log('[VYGO route] geometria coords:', geo?.coordinates?.length ?? 0, '| source:', (resp as any)?._source)
+      if (geo?.coordinates && geo.coordinates.length > 1) {
+        setRouteGeoJSON(geo)
+        console.log('[VYGO route] preview set ✓')
+      } else {
+        console.warn('[VYGO route] no geometria from agent — fallback will apply on accept')
       }
     })
   }, [order.id])
@@ -119,8 +123,10 @@ export function NewOrderSheet({ order }: NewOrderSheetProps) {
 
     // Use geometry from agent (A* real streets); fallback to straight lines
     const geo = agentResp?.plan?.geometria
+    console.log('[VYGO accept] geo coords:', geo?.coordinates?.length ?? 0)
     if (geo && geo.coordinates?.length > 1) {
       setRouteGeoJSON(geo)
+      console.log('[VYGO accept] agent geo set ✓')
     } else {
       let pos: [number, number] = [-100.3094, 25.6714]
       try {
@@ -130,10 +136,9 @@ export function NewOrderSheet({ order }: NewOrderSheetProps) {
           if (typeof p.lat === 'number' && typeof p.lng === 'number') pos = [p.lng, p.lat]
         }
       } catch {}
-      setRouteGeoJSON({
-        type: 'LineString',
-        coordinates: [pos, [order.pickup.lng, order.pickup.lat], [order.dropoff.lng, order.dropoff.lat]],
-      })
+      const fallback = { type: 'LineString' as const, coordinates: [pos, [order.pickup.lng, order.pickup.lat] as [number,number], [order.dropoff.lng, order.dropoff.lat] as [number,number]] }
+      setRouteGeoJSON(fallback)
+      console.log('[VYGO accept] fallback straight line set ✓', fallback.coordinates)
     }
 
     await new Promise((r) => setTimeout(r, 600))
