@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
-import { X, MapPin, Navigation, Zap, Shield, CheckCircle2 } from 'lucide-react'
+import { X, MapPin, Navigation, Zap, CheckCircle2 } from 'lucide-react'
 import { useOrdersStore } from '@/stores/orders.store'
 import { useRouteStore } from '@/stores/route.store'
+import { useDriverStore } from '@/stores/driver.store'
 import { PlatformBadge } from '@/components/PlatformBadge'
 import { Button } from '@/components/ui/button'
 import { formatCurrency, formatDistance, formatMinutes } from '@/lib/utils'
@@ -30,7 +31,7 @@ export function NewOrderSheet({ order }: NewOrderSheetProps) {
   const acceptOffer = useOrdersStore((s) => s.acceptOffer)
   const rejectOffer = useOrdersStore((s) => s.rejectOffer)
   const activeOrders = useOrdersStore((s) => s.activeOrders)
-  const rhoActual = useOrdersStore((s) => s.currentEarningsPerHour)
+  const rhoActual = useDriverStore((s) => s.earningsPerHour)   // unified ρ source
   const setRouteGeoJSON = useRouteStore((s) => s.setRouteGeoJSON)
 
   // #1 — Countdown timer
@@ -209,17 +210,12 @@ export function NewOrderSheet({ order }: NewOrderSheetProps) {
             </div>
           )}
 
-          {/* ── Ganancia + métricas ── */}
+          {/* ── Ganancia + métricas (3 columnas, sin "A tiempo") ── */}
           <div className="px-5 pb-3">
-            <div className="grid grid-cols-4 gap-2">
+            <div className="grid grid-cols-3 gap-2">
               <MetricPill value={formatCurrency(order.earnings)} label="Ganancia" highlight />
               <MetricPill value={`+${formatMinutes(order.extraMinutes ?? order.estimatedMinutes)}`} label="Tiempo extra" />
               <MetricPill value={`+${formatDistance(order.extraDistanceKm ?? order.distanceKm)}`} label="Distancia" />
-              <MetricPill
-                value={riesgo ? `${Math.round(riesgo.prob_entrega_a_tiempo * 100)}%` : '—'}
-                label="A tiempo"
-                highlight={!!riesgo && riesgo.prob_entrega_a_tiempo >= 0.85}
-              />
             </div>
           </div>
 
@@ -252,34 +248,6 @@ export function NewOrderSheet({ order }: NewOrderSheetProps) {
             </div>
           </div>
 
-          {/* ── Riesgo (frescura + holgura) si hay datos ── */}
-          {riesgo && (
-            <div className="px-5 pb-3">
-              <div className="flex gap-2">
-                <div className="flex-1 bg-vygo-card-2 border border-vygo-border rounded-xl px-3 py-2">
-                  <p className="text-[10px] text-vygo-secondary mb-1 flex items-center gap-1">
-                    <Zap size={10} /> Holgura frescura
-                  </p>
-                  <div className="h-1.5 bg-vygo-border rounded-full overflow-hidden">
-                    <div
-                      className={cn('h-full rounded-full', riesgo.holgura_frescura_min > 10 ? 'bg-vygo-green' : riesgo.holgura_frescura_min > 5 ? 'bg-vygo-warning' : 'bg-vygo-danger')}
-                      style={{ width: `${Math.min(100, (riesgo.holgura_frescura_min / 25) * 100)}%` }}
-                    />
-                  </div>
-                  <p className="text-xs font-medium text-vygo-white mt-1">{riesgo.holgura_frescura_min.toFixed(0)} min</p>
-                </div>
-                <div className="flex-1 bg-vygo-card-2 border border-vygo-border rounded-xl px-3 py-2">
-                  <p className="text-[10px] text-vygo-secondary mb-1 flex items-center gap-1">
-                    <Shield size={10} /> Anillo {riesgo.anillo}
-                  </p>
-                  <div className="h-1.5 bg-vygo-border rounded-full overflow-hidden">
-                    <div className="h-full bg-vygo-green rounded-full" style={{ width: `${riesgo.p_gana * 100}%` }} />
-                  </div>
-                  <p className="text-xs font-medium text-vygo-white mt-1">{Math.round(riesgo.p_gana * 100)}% prob. de ganar</p>
-                </div>
-              </div>
-            </div>
-          )}
 
           {/* ── Evento activo (surge) ── */}
           {agentResp?.evento_activo && (

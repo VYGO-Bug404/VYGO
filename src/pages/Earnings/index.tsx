@@ -7,6 +7,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { earningsService } from '@/services/earnings.service'
 import { useDriverStore } from '@/stores/driver.store'
 import { useOrdersStore } from '@/stores/orders.store'
+
 import { formatCurrency, formatDistance, formatMinutes } from '@/lib/utils'
 import { cn } from '@/lib/utils'
 import type { Platform, Order } from '@/types/order'
@@ -21,6 +22,22 @@ export function EarningsPage() {
 
   const mockSummary = earningsService.getSummary(period)
 
+  // B1 baseline rate from replay benchmark ($102/h)
+  const B1_RATE = 102
+  const shiftStartedAt = useDriverStore((s) => s.shiftStartedAt)
+  const horasWorked = shiftStartedAt
+    ? Math.max((Date.now() - shiftStartedAt.getTime()) / 3_600_000, 0.01)
+    : (completedOrders > 0 ? completedOrders * 0.3 : 0)
+
+  // "Gracias a VYGO" — difference vs B1 baseline (accept everything)
+  const b1Estimated = Math.round(B1_RATE * horasWorked)
+  const additionalEarnings = Math.max(0, todayEarnings - b1Estimated)
+  const pctMejora = b1Estimated > 0
+    ? Math.round(((todayEarnings - b1Estimated) / b1Estimated) * 100)
+    : 0
+  const kmSaved = Math.round(completedOrders * 2.1)   // ~2.1km saved per order vs B1
+  const minutesSaved = Math.round(completedOrders * 8) // ~8min saved per order vs B1
+
   // For "today", use live store data; week/month use mock data
   const summary = period === 'today'
     ? {
@@ -28,12 +45,16 @@ export function EarningsPage() {
         total: todayEarnings,
         perHour: earningsPerHour,
         totalOrders: completedOrders,
-        // Recalculate platform breakdown from completed orders if we have any real ones
+        additionalEarningsFromVygo: additionalEarnings,
+        kmSaved,
+        minutesSaved,
         byPlatform: completedOrdersList.length > 0
           ? buildPlatformBreakdown(completedOrdersList)
           : [],
       }
     : mockSummary
+
+  const vygoImpactPct = pctMejora
 
   const changeIsPositive = summary.changePercent >= 0
 
@@ -115,9 +136,16 @@ export function EarningsPage() {
 
               {/* VYGO value */}
               <div className="bg-vygo-green/5 border border-vygo-green/20 rounded-2xl p-4 mb-4">
-                <div className="flex items-center gap-2 mb-3">
-                  <Star size={14} className="text-vygo-green" />
-                  <p className="text-sm font-semibold text-vygo-white">Gracias a VYGO</p>
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <Star size={14} className="text-vygo-green" />
+                    <p className="text-sm font-semibold text-vygo-white">Gracias a VYGO</p>
+                  </div>
+                  {p === 'today' && vygoImpactPct > 0 && (
+                    <span className="text-xs font-bold text-vygo-green bg-vygo-green/10 px-2 py-0.5 rounded-full">
+                      +{vygoImpactPct}% vs sin VYGO
+                    </span>
+                  )}
                 </div>
                 <div className="grid grid-cols-3 gap-3 text-center">
                   <div>

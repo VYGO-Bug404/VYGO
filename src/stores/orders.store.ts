@@ -2,12 +2,12 @@ import { create } from 'zustand'
 import type { Order, OrderStatus } from '@/types/order'
 import { ordersService } from '@/services/orders.service'
 import { useDriverStore } from '@/stores/driver.store'
+import { useRouteStore } from '@/stores/route.store'
 
 interface OrdersStore {
   activeOrders: Order[]
   completedOrders: Order[]
   pendingOffer: Order | null
-  currentEarningsPerHour: number
   _nextRouteNumber: number
 
   acceptOffer: (order: Order) => void
@@ -23,7 +23,6 @@ export const useOrdersStore = create<OrdersStore>((set, get) => ({
   activeOrders: ordersService.getActiveOrders(),
   completedOrders: ordersService.getCompletedOrders(),
   pendingOffer: null,
-  currentEarningsPerHour: 0,
   _nextRouteNumber: 1,
 
   setPendingOffer: (order) => set({ pendingOffer: order }),
@@ -36,14 +35,15 @@ export const useOrdersStore = create<OrdersStore>((set, get) => ({
       acceptedAt: new Date(),
       routeNumber: order.routeNumber ?? _nextRouteNumber,
     }
-    const projected = order.projectedEarningsPerHour ?? get().currentEarningsPerHour
     set((state) => ({
       activeOrders: [...state.activeOrders, accepted],
       pendingOffer: null,
-      currentEarningsPerHour: projected,
       _nextRouteNumber: state._nextRouteNumber + 1,
     }))
     useDriverStore.getState().setStatus('active_route')
+    // Build route from updated active orders
+    const updated = [...get().activeOrders]
+    useRouteStore.getState().buildRoute(updated)
   },
 
   rejectOffer: () => set({ pendingOffer: null }),
@@ -63,6 +63,9 @@ export const useOrdersStore = create<OrdersStore>((set, get) => ({
         }
         if (remaining.length === 0) {
           useDriverStore.getState().setStatus('online')
+          useRouteStore.getState().clearRoute()
+        } else {
+          useRouteStore.getState().buildRoute(remaining)
         }
         return {
           activeOrders: remaining,
@@ -87,21 +90,18 @@ export const useOrdersStore = create<OrdersStore>((set, get) => ({
     }
 
     const next = nextStatus[order.status]
-    if (next) {
-      get().updateOrderStatus(id, next)
-    }
+    if (next) get().updateOrderStatus(id, next)
   },
 
-  resetShift: () =>
-    set({
-      activeOrders: [],
-      pendingOffer: null,
-      _nextRouteNumber: 1,
-    }),
+  resetShift: () => {
+    set({ activeOrders: [], pendingOffer: null, _nextRouteNumber: 1 })
+    useRouteStore.getState().clearRoute()
+  },
 
   simulateNewOrder: () => {
     const offer = ordersService.generateNewOffer()
-    offer.currentEarningsPerHour = get().currentEarningsPerHour
+    // Use unified ρ from driver store
+    offer.currentEarningsPerHour = useDriverStore.getState().earningsPerHour
     set({ pendingOffer: offer })
   },
 }))

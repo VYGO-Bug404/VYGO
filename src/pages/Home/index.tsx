@@ -64,9 +64,6 @@ export function HomePage() {
                     <span className="text-xl font-bold text-vygo-green text-money">
                       {formatCurrency(animatedEarnings)}
                     </span>
-                    <span className="flex items-center gap-0.5 text-[10px] font-semibold text-vygo-green bg-vygo-green/10 px-1.5 py-0.5 rounded-full">
-                      <TrendingUp size={9} />12%
-                    </span>
                   </div>
                   <span className="text-[11px] text-vygo-secondary mt-0.5">Hoy</span>
                 </div>
