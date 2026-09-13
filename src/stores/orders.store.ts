@@ -10,6 +10,7 @@ interface OrdersStore {
   pendingOffer: Order | null
   _nextRouteNumber: number
 
+  loadInitialData: () => Promise<void>
   acceptOffer: (order: Order) => void
   resetShift: () => void
   rejectOffer: () => void
@@ -20,10 +21,18 @@ interface OrdersStore {
 }
 
 export const useOrdersStore = create<OrdersStore>((set, get) => ({
-  activeOrders: ordersService.getActiveOrders(),
-  completedOrders: ordersService.getCompletedOrders(),
+  activeOrders: [],
+  completedOrders: [],
   pendingOffer: null,
   _nextRouteNumber: 1,
+
+  loadInitialData: async () => {
+    const [completed] = await Promise.all([
+      ordersService.fetchCompletedOrders(),
+      ordersService.loadOfferPool(),
+    ])
+    set({ completedOrders: completed })
+  },
 
   setPendingOffer: (order) => set({ pendingOffer: order }),
 

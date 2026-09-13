@@ -6,6 +6,7 @@ import { App } from './App'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/stores/auth.store'
 import { useDriverStore } from '@/stores/driver.store'
+import { useOrdersStore } from '@/stores/orders.store'
 
 const root = document.getElementById('root')
 if (!root) throw new Error('Root element not found')
@@ -30,6 +31,7 @@ supabase.auth.onAuthStateChange((event, session) => {
 // Restore existing session on page load
 useAuthStore.getState().initSession().then(() => {
   useDriverStore.getState().syncName()
+  useOrdersStore.getState().loadInitialData()
   createRoot(root).render(
     <StrictMode>
       <App />

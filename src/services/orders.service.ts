@@ -1,6 +1,89 @@
-import type { Order, OrderStatus } from '@/types/order'
-import { MOCK_ORDERS, NEW_ORDER_POOL } from './mock-data'
-import { generateId } from '@/lib/utils'
+import type { Order, OrderStatus, Platform, Recommendation } from '@/types/order'
+import { supabase } from '@/lib/supabase'
+
+const ZONA_LABEL: Record<string, string> = {
+  centro: 'Centro',
+  san_pedro: 'San Pedro',
+  tec: 'Tecnológico',
+  cumbres: 'Cumbres',
+  obispado: 'Obispado',
+  guadalupe: 'Guadalupe',
+  santa_catarina: 'Santa Catarina',
+}
+
+function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371
+  const dLat = ((lat2 - lat1) * Math.PI) / 180
+  const dLng = ((lng2 - lng1) * Math.PI) / 180
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLng / 2) ** 2
+  return R * 2 * Math.asin(Math.sqrt(a))
+}
+
+function toRecommendation(epk: number): Recommendation {
+  if (epk >= 25) return 'excellent'
+  if (epk >= 18) return 'good'
+  if (epk >= 12) return 'neutral'
+  return 'bad'
+}
+
+function toStatus(estado: string): OrderStatus {
+  const map: Record<string, OrderStatus> = {
+    creado: 'offered',
+    buscando: 'offered',
+    asignado: 'accepted',
+    en_camino: 'heading_to_pickup',
+    entregado: 'delivered',
+    cancelado: 'cancelled',
+  }
+  return map[estado] ?? 'offered'
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function mapRow(row: any): Order {
+  const distanceKm = parseFloat(
+    haversineKm(row.origen_lat, row.origen_lng, row.destino_lat, row.destino_lng).toFixed(1)
+  )
+  const earnings = parseFloat(row.precio)
+  const earningsPerKm = parseFloat((earnings / Math.max(distanceKm, 0.1)).toFixed(2))
+  const estimatedMinutes = Math.round(distanceKm * 3.5 + 2)
+  const zona: string = row.contexto?.zona ?? ''
+  const neighborhood = ZONA_LABEL[zona] ?? zona
+
+  return {
+    id: row.id,
+    orderNumber: row.id_externo ?? row.id.slice(0, 6).toUpperCase(),
+    platform: (row.plataforma as Platform) ?? 'uber',
+    restaurantName: row.contexto?.comercio_nombre ?? row.origen_direccion,
+    earnings,
+    pickup: {
+      name: row.contexto?.comercio_nombre,
+      address: row.origen_direccion,
+      neighborhood,
+      lat: row.origen_lat,
+      lng: row.origen_lng,
+    },
+    dropoff: {
+      address: row.destino_direccion,
+      neighborhood,
+      lat: row.destino_lat,
+      lng: row.destino_lng,
+    },
+    distanceKm,
+    estimatedMinutes,
+    earningsPerKm,
+    recommendation: toRecommendation(earningsPerKm),
+    status: toStatus(row.estado),
+    createdAt: new Date(row.creado_en),
+    acceptedAt: row.aceptado_en ? new Date(row.aceptado_en) : undefined,
+    deliveredAt: row.entregado_en ? new Date(row.entregado_en) : undefined,
+  }
+}
+
+let _offerPool: Order[] = []
 
 export const ordersService = {
   getActiveOrders(): Order[] {
@@ -8,70 +91,47 @@ export const ordersService = {
   },
 
   getCompletedOrders(): Order[] {
-    // Historial de demo — pedidos completados esta sesión para mostrar en /orders
-    const now = Date.now()
-    return [
-      {
-        id: 'hist-1', orderNumber: '4012', platform: 'rappi',
-        restaurantName: 'Sushi Roll Macroplaza',
-        earnings: 62, distanceKm: 2.1, estimatedMinutes: 9,
-        earningsPerKm: 29.5, recommendation: 'good',
-        pickup: { name: 'Sushi Roll Macroplaza', address: 'Macroplaza, Centro', neighborhood: 'Centro', lat: 25.6698, lng: -100.3102 },
-        dropoff: { address: 'Av. Constitución 1800', neighborhood: 'Centro', lat: 25.6720, lng: -100.3080 },
-        status: 'delivered', createdAt: new Date(now - 180 * 60000), acceptedAt: new Date(now - 178 * 60000), deliveredAt: new Date(now - 170 * 60000),
-      },
-      {
-        id: 'hist-2', orderNumber: '3871', platform: 'uber',
-        restaurantName: 'Centrito Burgers',
-        earnings: 66, distanceKm: 2.4, estimatedMinutes: 10,
-        earningsPerKm: 27.5, recommendation: 'excellent',
-        pickup: { name: 'Centrito Burgers', address: 'Av. Vasconcelos 300', neighborhood: 'San Pedro', lat: 25.6580, lng: -100.3640 },
-        dropoff: { address: 'Calz. del Valle 440', neighborhood: 'San Pedro', lat: 25.6610, lng: -100.3600 },
-        status: 'delivered', createdAt: new Date(now - 140 * 60000), acceptedAt: new Date(now - 138 * 60000), deliveredAt: new Date(now - 129 * 60000),
-      },
-      {
-        id: 'hist-3', orderNumber: '5502', platform: 'didi',
-        restaurantName: 'Chilaquiles Tec',
-        earnings: 58, distanceKm: 1.8, estimatedMinutes: 8,
-        earningsPerKm: 32.2, recommendation: 'good',
-        pickup: { name: 'Chilaquiles Tec', address: 'Av. Garza Sada 2101', neighborhood: 'Tecnológico', lat: 25.6515, lng: -100.2895 },
-        dropoff: { address: 'Calle del Roble 300', neighborhood: 'Tecnológico', lat: 25.6540, lng: -100.2920 },
-        status: 'delivered', createdAt: new Date(now - 100 * 60000), acceptedAt: new Date(now - 98 * 60000), deliveredAt: new Date(now - 91 * 60000),
-      },
-      {
-        id: 'hist-4', orderNumber: '6193', platform: 'rappi',
-        restaurantName: 'Tacos El Primo',
-        earnings: 57, distanceKm: 1.9, estimatedMinutes: 9,
-        earningsPerKm: 30.0, recommendation: 'good',
-        pickup: { name: 'Tacos El Primo', address: 'Av. Cuauhtémoc 400', neighborhood: 'Centro', lat: 25.6740, lng: -100.3160 },
-        dropoff: { address: 'Av. Colón 720', neighborhood: 'Centro', lat: 25.6760, lng: -100.3120 },
-        status: 'delivered', createdAt: new Date(now - 60 * 60000), acceptedAt: new Date(now - 58 * 60000), deliveredAt: new Date(now - 50 * 60000),
-      },
-      {
-        id: 'hist-5', orderNumber: '7744', platform: 'uber',
-        restaurantName: 'Pangea Express Valle Oriente',
-        earnings: 74, distanceKm: 3.2, estimatedMinutes: 12,
-        earningsPerKm: 23.1, recommendation: 'excellent',
-        pickup: { name: 'Pangea Express', address: 'Av. David Alfaro Siqueiros 106', neighborhood: 'San Pedro', lat: 25.6420, lng: -100.3310 },
-        dropoff: { address: 'Av. Insurgentes 1540', neighborhood: 'San Pedro', lat: 25.6580, lng: -100.3440 },
-        status: 'delivered', createdAt: new Date(now - 25 * 60000), acceptedAt: new Date(now - 23 * 60000), deliveredAt: new Date(now - 12 * 60000),
-      },
-    ] as Order[]
+    return []
   },
 
-  getOrderById(id: string): Order | undefined {
-    return MOCK_ORDERS.find((o) => o.id === id)
+  async fetchCompletedOrders(): Promise<Order[]> {
+    const { data, error } = await supabase
+      .from('pedidos_vista')
+      .select('*')
+      .eq('estado', 'entregado')
+      .order('entregado_en', { ascending: false })
+      .limit(20)
+    if (error) {
+      console.error('fetchCompletedOrders:', error)
+      return []
+    }
+    return (data ?? []).map(mapRow)
+  },
+
+  async loadOfferPool(): Promise<void> {
+    const { data, error } = await supabase
+      .from('pedidos_vista')
+      .select('*')
+      .eq('estado', 'buscando')
+    if (error) {
+      console.error('loadOfferPool:', error)
+      return
+    }
+    _offerPool = (data ?? []).map(mapRow)
   },
 
   generateNewOffer(): Order {
-    const pool = NEW_ORDER_POOL
+    const pool = _offerPool.length > 0 ? _offerPool : []
+    if (pool.length === 0) {
+      throw new Error('Offer pool not loaded yet')
+    }
     const template = pool[Math.floor(Math.random() * pool.length)]
     return {
       ...template,
-      id: `order-${generateId()}`,
+      id: `offer-${Date.now()}`,
       status: 'offered',
       createdAt: new Date(),
-      expiresAt: new Date(Date.now() + 30_000), // 30s to decide
+      expiresAt: new Date(Date.now() + 30_000),
     }
   },
 
