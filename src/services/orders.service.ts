@@ -1,5 +1,19 @@
 import type { Order, OrderStatus, Platform, Recommendation } from '@/types/order'
 import { supabase } from '@/lib/supabase'
+import { getConfig } from '@/services/config.service'
+
+// BBOX del grafo A* del backend (OpenStreetMap Monterrey)
+const BBOX = { lngMin: -100.360, lngMax: -100.240, latMin: 25.630, latMax: 25.720 }
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function inBbox(row: any): boolean {
+  return (
+    row.origen_lng >= BBOX.lngMin && row.origen_lng <= BBOX.lngMax &&
+    row.origen_lat >= BBOX.latMin && row.origen_lat <= BBOX.latMax &&
+    row.destino_lng >= BBOX.lngMin && row.destino_lng <= BBOX.lngMax &&
+    row.destino_lat >= BBOX.latMin && row.destino_lat <= BBOX.latMax
+  )
+}
 
 const ZONA_LABEL: Record<string, string> = {
   centro: 'Centro',
@@ -134,7 +148,7 @@ export const ordersService = {
       console.error('loadOfferPool:', error)
       return
     }
-    _offerPool = (data ?? []).map(mapRow)
+    _offerPool = (data ?? []).filter(inBbox).map(mapRow)
   },
 
   generateNewOffer(customDriverPos?: { lat: number; lng: number }): Order {
@@ -165,7 +179,7 @@ export const ordersService = {
       pickupDistanceKm: seleccionado.pickupDist,
       status: 'offered',
       createdAt: new Date(),
-      expiresAt: new Date(Date.now() + 30_000),
+      expiresAt: new Date(Date.now() + getConfig().expiracionOfertaSeg * 1000),
     }
   },
 

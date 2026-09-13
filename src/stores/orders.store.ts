@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import type { Order, OrderStatus } from '@/types/order'
 import { ordersService } from '@/services/orders.service'
+import { loadConfig, getConfig } from '@/services/config.service'
 import { useDriverStore } from '@/stores/driver.store'
 import { useRouteStore } from '@/stores/route.store'
 
@@ -30,6 +31,7 @@ export const useOrdersStore = create<OrdersStore>((set, get) => ({
     const [completed] = await Promise.all([
       ordersService.fetchCompletedOrders(),
       ordersService.loadOfferPool(),
+      loadConfig(),
     ])
     set({ completedOrders: completed })
 
@@ -58,7 +60,8 @@ export const useOrdersStore = create<OrdersStore>((set, get) => ({
   setPendingOffer: (order) => set({ pendingOffer: order }),
 
   acceptOffer: (order, agentPlan) => {
-    const { _nextRouteNumber } = get()
+    const { _nextRouteNumber, activeOrders } = get()
+    if (activeOrders.length >= getConfig().maxPedidosSimultaneos) return
     const accepted: Order = {
       ...order,
       status: 'heading_to_pickup',
