@@ -34,12 +34,22 @@ export function NewOrderSheet({ order }: NewOrderSheetProps) {
   const rhoActual = useDriverStore((s) => s.earningsPerHour)   // unified ρ source
   const setRouteGeoJSON = useRouteStore((s) => s.setRouteGeoJSON)
 
+  const previousGeoRef = useRef(useRouteStore.getState().routeGeoJSON)
+
   // #1 — Countdown timer
   useEffect(() => {
-    if (secondsLeft <= 0) { rejectOffer(); return }
+    if (secondsLeft <= 0) {
+      setRouteGeoJSON(previousGeoRef.current)
+      rejectOffer()
+      return
+    }
     const id = setInterval(() => {
       setSecondsLeft((s) => {
-        if (s <= 1) { rejectOffer(); return 0 }
+        if (s <= 1) {
+          setRouteGeoJSON(previousGeoRef.current)
+          rejectOffer()
+          return 0
+        }
         return s - 1
       })
     }, 1000)
@@ -62,6 +72,10 @@ export function NewOrderSheet({ order }: NewOrderSheetProps) {
     decidir(order, rhoActual, pos, activeOrders).then((resp) => {
       setAgentResp(resp)
       setLoading(false)
+      // Preview proposed A* route on map behind the sheet
+      if (resp?.plan?.geometria?.coordinates && resp.plan.geometria.coordinates.length > 1) {
+        setRouteGeoJSON(resp.plan.geometria)
+      }
     })
   }, [order.id])
 
@@ -80,6 +94,7 @@ export function NewOrderSheet({ order }: NewOrderSheetProps) {
       const gain = Math.max(0, Math.round(rateDiff * timeH))
       addVygoGain(gain, eco.delta_distancia_km, eco.delta_tiempo_min)
     }
+    setRouteGeoJSON(previousGeoRef.current)
     rejectOffer()
   }
 
@@ -90,7 +105,10 @@ export function NewOrderSheet({ order }: NewOrderSheetProps) {
   const handleTouchEnd = (e: React.TouchEvent) => {
     if (touchStartY.current === null) return
     const delta = e.changedTouches[0].clientY - touchStartY.current
-    if (delta > SWIPE_THRESHOLD) rejectOffer()
+    if (delta > SWIPE_THRESHOLD) {
+      setRouteGeoJSON(previousGeoRef.current)
+      rejectOffer()
+    }
     touchStartY.current = null
   }
 

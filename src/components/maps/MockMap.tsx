@@ -89,11 +89,13 @@ export function MockMap({
   const driverRef = useRef<Marker | null>(null)
   const watchRef = useRef<number | null>(null)
   const followDriverRef = useRef(followDriver)
+  const routeGeoJSONRef = useRef<RouteGeoJSON | null>(routeGeoJSON ?? null)
   const [ready, setReady] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // Keep ref in sync with prop
+  // Keep refs in sync with props
   useEffect(() => { followDriverRef.current = followDriver }, [followDriver])
+  useEffect(() => { routeGeoJSONRef.current = routeGeoJSON ?? null }, [routeGeoJSON])
 
   // ── Init map ──────────────────────────────────────────────
   useEffect(() => {
@@ -129,18 +131,32 @@ export function MockMap({
             data: { type: 'FeatureCollection', features: [] },
           })
           map!.addLayer({
+            id: 'route-shadow',
+            type: 'line',
+            source: 'route',
+            layout: { 'line-cap': 'round', 'line-join': 'round' },
+            paint: { 'line-color': '#0F172A', 'line-width': 12, 'line-opacity': 0.25, 'line-blur': 2 },
+          })
+          map!.addLayer({
             id: 'route-casing',
             type: 'line',
             source: 'route',
             layout: { 'line-cap': 'round', 'line-join': 'round' },
-            paint: { 'line-color': '#FFFFFF', 'line-width': 8, 'line-opacity': 0.5 },
+            paint: { 'line-color': '#FFFFFF', 'line-width': 9, 'line-opacity': 0.95 },
           })
           map!.addLayer({
             id: 'route-line',
             type: 'line',
             source: 'route',
             layout: { 'line-cap': 'round', 'line-join': 'round' },
-            paint: { 'line-color': '#6FA800', 'line-width': 4 },
+            paint: { 'line-color': '#6FA800', 'line-width': 6, 'line-opacity': 1.0 },
+          })
+          map!.addLayer({
+            id: 'route-inner-glow',
+            type: 'line',
+            source: 'route',
+            layout: { 'line-cap': 'round', 'line-join': 'round' },
+            paint: { 'line-color': '#BEF264', 'line-width': 2.5, 'line-opacity': 0.85 },
           })
           setReady(true)
         })
@@ -279,10 +295,13 @@ export function MockMap({
     if (!map || !ready) return
 
     const el = document.createElement('div')
-    el.style.cssText = 'width:24px;height:24px;position:relative;'
+    el.style.cssText = 'width:32px;height:32px;position:relative;display:flex;align-items:center;justify-content:center;'
     el.innerHTML = `
-      <div style="position:absolute;inset:0;background:#6FA800;border-radius:50%;opacity:0.3;animation:ping 2s cubic-bezier(0,0,0.2,1) infinite;"></div>
-      <div style="position:absolute;inset:4px;background:#6FA800;border-radius:50%;border:2.5px solid #FFFFFF;box-shadow:0 0 8px rgba(111,168,0,0.5);"></div>
+      <div style="position:absolute;inset:0;background:#6FA800;border-radius:50%;opacity:0.3;animation:ping 2.5s cubic-bezier(0,0,0.2,1) infinite;"></div>
+      <div style="position:absolute;inset:4px;background:#6FA800;border-radius:50%;opacity:0.2;"></div>
+      <div style="position:relative;width:20px;height:20px;background:#6FA800;border-radius:50%;border:3px solid #FFFFFF;box-shadow:0 2px 8px rgba(0,0,0,0.45);display:flex;align-items:center;justify-content:center;">
+        <div style="width:5px;height:5px;background:#FFFFFF;border-radius:50%;"></div>
+      </div>
     `
 
     const marker = new Marker({ element: el, anchor: 'center' })
@@ -297,6 +316,33 @@ export function MockMap({
       savePosition(lng, lat)
       if (followDriverRef.current && mapRef.current) {
         mapRef.current.easeTo({ center: lngLat, duration: 600, essential: true })
+      }
+
+      // Dynamic route slicing: recortar segmentos ya recorridos y anclar al vehículo
+      const currentRoute = routeGeoJSONRef.current
+      if (currentRoute?.coordinates && currentRoute.coordinates.length > 2 && mapRef.current) {
+        const src = mapRef.current.getSource('route') as GeoJSONSource | undefined
+        if (src) {
+          const coords = currentRoute.coordinates
+          let bestIdx = 0
+          let minDist = Infinity
+          for (let i = 0; i < coords.length; i++) {
+            const d = (coords[i][0] - lng) ** 2 + (coords[i][1] - lat) ** 2
+            if (d < minDist) {
+              minDist = d
+              bestIdx = i
+            }
+          }
+          // Si está a menos de ~300m (0.003 deg) de algún punto de la ruta, recortamos los puntos anteriores
+          if (minDist < 0.000009 && bestIdx > 0 && bestIdx < coords.length - 1) {
+            const activeCoords: [number, number][] = [[lng, lat], ...coords.slice(bestIdx + 1)]
+            src.setData({
+              type: 'Feature',
+              geometry: { type: 'LineString', coordinates: activeCoords },
+              properties: {},
+            })
+          }
+        }
       }
     }
 
