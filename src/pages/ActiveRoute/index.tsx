@@ -57,33 +57,33 @@ export function ActiveRoutePage() {
 
   const recalculatingRef = useRef(false)
 
-  // Recalcula la línea de A* conectando SIEMPRE desde la posición del conductor
-  // hacia el siguiente objetivo prioritario (recogida y luego entrega)
+  // Traza la línea A* desde la posición actual del repartidor SOLO hacia
+  // el próximo punto prioritario (un segmento a la vez, no toda la cadena).
+  // Flujo: conductor → pickup(C), luego al entregar → conductor → dropoff(C).
   const recalculateRoute = useCallback(async (pos: { lat: number; lng: number }) => {
     if (activeOrders.length === 0) {
       setRouteGeoJSON(null)
       return
     }
 
-    const destinations: { lat: number; lng: number }[] = []
+    // Determinar el ÚNICO próximo destino: la parada actual en la secuencia del agente
+    let nextDestination: { lat: number; lng: number } | null = null
+
     if (activeRoute?.stops && activeRoute.stops.length > currentStopIndex) {
-      for (let i = currentStopIndex; i < activeRoute.stops.length; i++) {
-        const stop = activeRoute.stops[i]
-        const pt = stop.type === 'pickup' ? stop.order.pickup : stop.order.dropoff
-        if (pt) destinations.push({ lat: pt.lat, lng: pt.lng })
-      }
+      const nextStop = activeRoute.stops[currentStopIndex]
+      const pt = nextStop.type === 'pickup' ? nextStop.order.pickup : nextStop.order.dropoff
+      if (pt) nextDestination = { lat: pt.lat, lng: pt.lng }
     } else {
-      activeOrders.forEach((o) => {
-        if (o.status !== 'picked_up' && o.status !== 'delivered') {
-          destinations.push({ lat: o.pickup.lat, lng: o.pickup.lng })
-        }
-        if (o.status !== 'delivered') {
-          destinations.push({ lat: o.dropoff.lat, lng: o.dropoff.lng })
-        }
-      })
+      // Fallback: siguiente punto lógico basado en el estado del pedido activo
+      const order = activeOrders[0]
+      if (order) {
+        nextDestination = order.status === 'picked_up'
+          ? { lat: order.dropoff.lat, lng: order.dropoff.lng }
+          : { lat: order.pickup.lat, lng: order.pickup.lng }
+      }
     }
 
-    if (destinations.length === 0) {
+    if (!nextDestination) {
       setRouteGeoJSON(null)
       return
     }
@@ -92,10 +92,8 @@ export function ActiveRoutePage() {
     recalculatingRef.current = true
 
     try {
-      const routeData = await obtenerRutaAstar(pos, destinations)
-      // Solo actualizar si la ruta devuelta tiene densidad vial real (A* > 5 puntos)
-      // para evitar que un fallback recto sobreescriba una ruta existente de alta fidelidad
-      if (routeData?.coordinates && routeData.coordinates.length > 5) {
+      const routeData = await obtenerRutaAstar(pos, [nextDestination])
+      if (routeData?.coordinates && routeData.coordinates.length >= 2) {
         setRouteGeoJSON({
           type: 'LineString',
           coordinates: routeData.coordinates,
@@ -108,12 +106,10 @@ export function ActiveRoutePage() {
     }
   }, [activeOrders, activeRoute, currentStopIndex, setRouteGeoJSON])
 
-  // Solo recalcular si NO existe ya una ruta vial cargada en el store
+  // Recalcular siempre que el repartidor avance de parada — cada segmento nuevo
+  // traza de la posición actual al siguiente punto prioritario
   useEffect(() => {
-    const existing = useRouteStore.getState().routeGeoJSON
-    if (!existing || !existing.coordinates || existing.coordinates.length < 10) {
-      recalculateRoute(driverPos)
-    }
+    recalculateRoute(driverPos)
   }, [currentStopIndex, activeOrders.length])
 
   const { tryEndShift, confirming, confirmEnd, cancelConfirm } = useEndShift()
