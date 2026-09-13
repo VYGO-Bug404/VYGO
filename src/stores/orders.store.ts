@@ -67,7 +67,7 @@ export const useOrdersStore = create<OrdersStore>((set, get) => ({
         const delivered = order ? { ...order, status: 'delivered' as const, deliveredAt: new Date() } : null
         const remaining = state.activeOrders.filter((o) => o.id !== id)
         if (order) {
-          useDriverStore.getState().addEarnings(order.earnings)
+          useDriverStore.getState().addEarnings(order.earnings, order.estimatedMinutes)
           useDriverStore.getState().incrementCompletedOrders()
         }
         if (remaining.length === 0) {

@@ -4,10 +4,11 @@ import { driverService } from '@/services/driver.service'
 import { useAuthStore } from '@/stores/auth.store'
 
 interface DriverStore extends Omit<DriverState, 'activeMinutes'> {
+  _totalDeliveryMinutes: number
   startShift: () => void
   endShift: () => void
   setStatus: (status: DriverStatus) => void
-  addEarnings: (amount: number) => void
+  addEarnings: (amount: number, estimatedMinutes?: number) => void
   incrementCompletedOrders: () => void
   syncTelemetria: (t: { rho_actual_mxn_h: number; ganancia_turno_mxn: number; pedidos_entregados: number }) => void
   syncName: () => void
@@ -33,6 +34,7 @@ export const useDriverStore = create<DriverStore>((set, get) => ({
   earningsPerHour: driverService.getEarningsPerHour(),
   completedOrders: driverService.getCompletedOrdersCount(),
   shiftStartedAt: null,
+  _totalDeliveryMinutes: 0,
 
   startShift: () =>
     set({
@@ -47,18 +49,18 @@ export const useDriverStore = create<DriverStore>((set, get) => ({
       todayEarnings: 0,
       earningsPerHour: 0,
       completedOrders: 0,
+      _totalDeliveryMinutes: 0,
     }),
 
   setStatus: (status) => set({ status }),
 
-  addEarnings: (amount: number) =>
+  addEarnings: (amount: number, estimatedMinutes = 0) =>
     set((state) => {
       const newEarnings = state.todayEarnings + amount
-      const shiftMinutes = state.shiftStartedAt
-        ? (Date.now() - state.shiftStartedAt.getTime()) / 60000
-        : 60
-      const newPerHour = Math.round(newEarnings / Math.max(shiftMinutes / 60, 0.25))
-      return { todayEarnings: newEarnings, earningsPerHour: newPerHour }
+      const newDeliveryMinutes = state._totalDeliveryMinutes + estimatedMinutes
+      // Use accumulated delivery time; floor at 30 min to avoid division by near-zero
+      const newPerHour = Math.round(newEarnings / Math.max(newDeliveryMinutes / 60, 0.5))
+      return { todayEarnings: newEarnings, earningsPerHour: newPerHour, _totalDeliveryMinutes: newDeliveryMinutes }
     }),
 
   incrementCompletedOrders: () =>
