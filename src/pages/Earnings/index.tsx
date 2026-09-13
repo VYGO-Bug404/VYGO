@@ -18,33 +18,66 @@ export function EarningsPage() {
   const todayEarnings = useDriverStore((s) => s.todayEarnings)
   const earningsPerHour = useDriverStore((s) => s.earningsPerHour)
   const completedOrders = useDriverStore((s) => s.completedOrders)
+  const shiftStartedAt = useDriverStore((s) => s.shiftStartedAt)
+  const vygoGainMxn = useDriverStore((s) => s.vygoGainMxn)
+  const vygoKmSaved = useDriverStore((s) => s.vygoKmSaved)
+  const vygoMinutesSaved = useDriverStore((s) => s.vygoMinutesSaved)
   const completedOrdersList = useOrdersStore((s) => s.completedOrders)
 
-  const mockSummary = earningsService.getSummary(period)
+  // ── Cálculos reales para "Hoy" desde los pedidos completados ────────────────
+  const totalKm = completedOrdersList.reduce((s, o) => s + o.distanceKm, 0)
+  const perKm = totalKm > 0 ? todayEarnings / totalKm : 0
 
-  // B1 baseline rate from replay benchmark ($102/h)
+  // Agrupar ganancias por hora usando deliveredAt
+  const hourMap: Record<number, { earnings: number; orders: number }> = {}
+  for (const o of completedOrdersList) {
+    if (!o.deliveredAt) continue
+    const h = o.deliveredAt.getHours()
+    if (!hourMap[h]) hourMap[h] = { earnings: 0, orders: 0 }
+    hourMap[h].earnings += o.earnings
+    hourMap[h].orders += 1
+  }
+  const hourly = Object.entries(hourMap)
+    .sort(([a], [b]) => Number(a) - Number(b))
+    .map(([hour, d]) => {
+      const h = Number(hour)
+      return { hour: h, label: `${h % 12 || 12}${h < 12 ? 'AM' : 'PM'}`, earnings: d.earnings, orders: d.orders }
+    })
+  const bestHour = hourly.reduce(
+    (best, h) => (h.earnings > best.earnings ? h : best),
+    { hour: 0, label: '', earnings: 0, orders: 0 }
+  )
+  const bestHourRange = bestHour.earnings > 0 ? `${bestHour.label} – ${(bestHour.hour + 1) % 24}:00` : '—'
+
+  // B1 baseline ($102/h) para comparativa VYGO
   const B1_RATE = 102
-  const shiftStartedAt = useDriverStore((s) => s.shiftStartedAt)
   const horasWorked = shiftStartedAt
     ? Math.max((Date.now() - shiftStartedAt.getTime()) / 3_600_000, 0.01)
     : (completedOrders > 0 ? completedOrders * 0.3 : 0)
-
-  // "Gracias a VYGO" — difference vs B1 baseline (accept everything)
   const b1Estimated = Math.round(B1_RATE * horasWorked)
-  const additionalEarnings = Math.max(0, todayEarnings - b1Estimated)
+  const b1Gain = Math.max(0, todayEarnings - b1Estimated)
+
+  // Usar ganancia real de VYGO (rechazos correctos) si supera estimado B1
+  const additionalEarnings = Math.max(vygoGainMxn, b1Gain)
+  const kmSaved = vygoKmSaved > 0 ? vygoKmSaved : Math.round(completedOrders * 2.1)
+  const minutesSaved = vygoMinutesSaved > 0 ? vygoMinutesSaved : Math.round(completedOrders * 8)
   const pctMejora = b1Estimated > 0
     ? Math.round(((todayEarnings - b1Estimated) / b1Estimated) * 100)
     : 0
-  const kmSaved = Math.round(completedOrders * 2.1)   // ~2.1km saved per order vs B1
-  const minutesSaved = Math.round(completedOrders * 8) // ~8min saved per order vs B1
 
-  // For "today", use live store data; week/month use mock data
+  const mockSummary = earningsService.getSummary(period)
+
   const summary = period === 'today'
     ? {
         ...mockSummary,
         total: todayEarnings,
         perHour: earningsPerHour,
+        perKm: Math.round(perKm * 10) / 10,
+        totalKm: Math.round(totalKm * 10) / 10,
         totalOrders: completedOrders,
+        hourly,
+        bestHourRange,
+        bestHourEarnings: bestHour.earnings,
         additionalEarningsFromVygo: additionalEarnings,
         kmSaved,
         minutesSaved,
@@ -55,8 +88,6 @@ export function EarningsPage() {
     : mockSummary
 
   const vygoImpactPct = pctMejora
-
-  const changeIsPositive = summary.changePercent >= 0
 
   return (
     <div className="flex flex-col min-h-full">
@@ -122,21 +153,13 @@ export function EarningsPage() {
                   <span className="text-4xl font-bold text-vygo-green text-money">
                     {formatCurrency(summary.total)}
                   </span>
-                  <span
-                    className={cn(
-                      'flex items-center gap-1 text-sm font-semibold rounded-full px-2 py-0.5 mb-1',
-                      changeIsPositive
-                        ? 'bg-vygo-green/15 text-vygo-green'
-                        : 'bg-vygo-danger/15 text-vygo-danger'
-                    )}
-                  >
-                    <TrendingUp size={12} />
-                    {changeIsPositive ? '+' : ''}{summary.changePercent.toFixed(1)}%
-                  </span>
+                  {p === 'today' && summary.perHour > 0 && (
+                    <span className="flex items-center gap-1 text-sm font-semibold rounded-full px-2 py-0.5 mb-1 bg-vygo-green/15 text-vygo-green">
+                      <TrendingUp size={12} />
+                      ${summary.perHour}/h
+                    </span>
+                  )}
                 </div>
-                <p className="text-xs text-vygo-secondary">
-                  vs {p === 'today' ? 'ayer' : p === 'week' ? 'semana anterior' : 'mes anterior'}
-                </p>
               </div>
 
               {/* Chart */}

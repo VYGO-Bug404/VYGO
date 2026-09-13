@@ -5,6 +5,9 @@ import { useAuthStore } from '@/stores/auth.store'
 
 interface DriverStore extends Omit<DriverState, 'activeMinutes'> {
   _totalDeliveryMinutes: number
+  vygoGainMxn: number
+  vygoKmSaved: number
+  vygoMinutesSaved: number
   startShift: () => void
   endShift: () => void
   setStatus: (status: DriverStatus) => void
@@ -12,6 +15,7 @@ interface DriverStore extends Omit<DriverState, 'activeMinutes'> {
   incrementCompletedOrders: () => void
   syncTelemetria: (t: { rho_actual_mxn_h: number; ganancia_turno_mxn: number; pedidos_entregados: number }) => void
   syncName: () => void
+  addVygoGain: (gainMxn: number, kmSaved: number, minutesSaved: number) => void
 }
 
 function getInitialDriver() {
@@ -35,6 +39,9 @@ export const useDriverStore = create<DriverStore>((set, get) => ({
   completedOrders: driverService.getCompletedOrdersCount(),
   shiftStartedAt: null,
   _totalDeliveryMinutes: 0,
+  vygoGainMxn: 0,
+  vygoKmSaved: 0,
+  vygoMinutesSaved: 0,
 
   startShift: () =>
     set({
@@ -50,6 +57,9 @@ export const useDriverStore = create<DriverStore>((set, get) => ({
       earningsPerHour: 0,
       completedOrders: 0,
       _totalDeliveryMinutes: 0,
+      vygoGainMxn: 0,
+      vygoKmSaved: 0,
+      vygoMinutesSaved: 0,
     }),
 
   setStatus: (status) => set({ status }),
@@ -71,6 +81,13 @@ export const useDriverStore = create<DriverStore>((set, get) => ({
       todayEarnings: telemetria.ganancia_turno_mxn,
       earningsPerHour: telemetria.rho_actual_mxn_h,
       completedOrders: telemetria.pedidos_entregados,
+    })),
+
+  addVygoGain: (gainMxn, kmSaved, minutesSaved) =>
+    set((state) => ({
+      vygoGainMxn: state.vygoGainMxn + gainMxn,
+      vygoKmSaved: state.vygoKmSaved + kmSaved,
+      vygoMinutesSaved: state.vygoMinutesSaved + minutesSaved,
     })),
 
   syncName: () => {

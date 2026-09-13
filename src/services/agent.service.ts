@@ -5,6 +5,8 @@ import { useAuthStore } from '@/stores/auth.store'
 
 const AGENT_URL = import.meta.env.VITE_AGENT_URL
 const TIMEOUT_MS = 12000
+// Tasa de referencia MTY cuando el repartidor aún no ha completado pedidos
+const BASELINE_RHO_MXN_H = 120
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -158,6 +160,8 @@ export async function decidir(
   posicion?: { lat: number; lon: number },
   activeOrders: Order[] = [],
 ): Promise<RespuestaDecidir & { _source: 'agent' | 'b2_fallback' | 'static' }> {
+  // Usar baseline cuando el turno aún no tiene entregas — evita comparar contra $0/h
+  const effectiveRho = rhoActual > 0 ? rhoActual : BASELINE_RHO_MXN_H
 
   if (AGENT_URL) {
     try {
@@ -182,7 +186,7 @@ export async function decidir(
           minutos_turno_restantes: minutosRestantes,
           ganancia_turno_mxn: driverStore.todayEarnings,
           km_recorridos: 0,
-          rho_actual_mxn_h: rhoActual,
+          rho_actual_mxn_h: effectiveRho,
         },
         plan_activo: activeOrders.map(orderToPlanActivo),
         ofertas: [orderToOferta(offer)],
@@ -224,7 +228,7 @@ export async function decidir(
   }
 
   const source = AGENT_URL ? 'b2_fallback' : 'static'
-  return { ...b2Fallback(offer, rhoActual, posicion), _source: source }
+  return { ...b2Fallback(offer, effectiveRho, posicion), _source: source }
 }
 
 export function politicaLabel(p: Politica): string {

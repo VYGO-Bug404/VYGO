@@ -70,6 +70,19 @@ export function NewOrderSheet({ order }: NewOrderSheetProps) {
   const riesgo = dec?.riesgo
   const recomienda = dec?.decision === 'aceptar'
 
+  const addVygoGain = useDriverStore((s) => s.addVygoGain)
+
+  // Rechazo manual — si el agente recomendó rechazar, acumula ganancia real de VYGO
+  const handleReject = () => {
+    if (!recomienda && eco && eco.tasa_marginal_mxn_h < eco.rho_actual_mxn_h) {
+      const timeH = eco.delta_tiempo_min / 60
+      const rateDiff = eco.rho_actual_mxn_h - eco.tasa_marginal_mxn_h
+      const gain = Math.max(0, Math.round(rateDiff * timeH))
+      addVygoGain(gain, eco.delta_distancia_km, eco.delta_tiempo_min)
+    }
+    rejectOffer()
+  }
+
   // #9 — Swipe down to reject
   const handleTouchStart = (e: React.TouchEvent) => {
     touchStartY.current = e.touches[0].clientY
@@ -112,7 +125,7 @@ export function NewOrderSheet({ order }: NewOrderSheetProps) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center animate-fade-in">
-      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={rejectOffer} />
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={handleReject} />
 
       <div
         className="relative w-full max-w-[430px] bg-vygo-card rounded-t-3xl shadow-sheet animate-slide-up overflow-hidden"
@@ -296,7 +309,7 @@ export function NewOrderSheet({ order }: NewOrderSheetProps) {
 
           {/* ── Buttons ── */}
           <div className="px-5 pb-6 grid grid-cols-2 gap-3">
-            <Button variant="destructive" size="lg" onClick={rejectOffer} className="h-14">
+            <Button variant="destructive" size="lg" onClick={handleReject} className="h-14">
               Rechazar
             </Button>
             <Button
