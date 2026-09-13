@@ -2,14 +2,17 @@ type Coord = [number, number] // [lng, lat]
 type LineString = { type: 'LineString'; coordinates: Coord[] }
 
 const OSRM = 'https://router.project-osrm.org/route/v1/driving'
+const TIMEOUT_MS = 8000
 
 export async function fetchStreetRoute(waypoints: Coord[]): Promise<LineString | null> {
   if (waypoints.length < 2) return null
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS)
   try {
     const coords = waypoints.map(([lng, lat]) => `${lng},${lat}`).join(';')
     const res = await fetch(
       `${OSRM}/${coords}?geometries=geojson&overview=full`,
-      { signal: AbortSignal.timeout(5000) }
+      { signal: controller.signal }
     )
     if (!res.ok) return null
     const data = await res.json()
@@ -20,5 +23,7 @@ export async function fetchStreetRoute(waypoints: Coord[]): Promise<LineString |
     return null
   } catch {
     return null
+  } finally {
+    clearTimeout(timer)
   }
 }
