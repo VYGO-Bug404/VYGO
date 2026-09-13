@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import type { Frame, Telemetria } from '@/lib/vygoAgent'
 
-const AGENT_URL = import.meta.env.VITE_AGENT_URL
+const AGENT_URL = import.meta.env.VITE_AGENT_URL || 'https://vygo-backend.onrender.com'
 
 interface UseTurnoStreamOptions {
   escenario?: number
