@@ -73,6 +73,35 @@ export function EarningsPage() {
 
           {(['today', 'week', 'month'] as const).map((p) => (
             <TabsContent key={p} value={p}>
+
+              {/* Empty state — today sin datos */}
+              {p === 'today' && todayEarnings === 0 && completedOrders === 0 && (
+                <div className="bg-vygo-card border border-vygo-border rounded-2xl p-8 text-center">
+                  <div className="w-14 h-14 rounded-full bg-vygo-green/10 border border-vygo-green/20 flex items-center justify-center mx-auto mb-4">
+                    <TrendingUp size={24} className="text-vygo-green" />
+                  </div>
+                  <p className="text-vygo-white font-semibold text-base mb-1">Aún no hay ganancias hoy</p>
+                  <p className="text-vygo-secondary text-sm mb-4">
+                    Inicia una jornada y acepta pedidos para ver tus resultados aquí.
+                  </p>
+                  <div className="bg-vygo-card-2 border border-vygo-border rounded-xl p-4 text-left space-y-2">
+                    <p className="text-xs text-vygo-secondary font-semibold uppercase tracking-widest mb-2">Benchmark del sistema</p>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-vygo-secondary">Sin VYGO (B1)</span>
+                      <span className="text-vygo-white font-semibold">$102/h</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-vygo-secondary">VYGO regla (B2)</span>
+                      <span className="text-vygo-white font-semibold">$158/h</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-vygo-secondary">VYGO agente (PPO)</span>
+                      <span className="text-vygo-green font-bold">$169/h ↑</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Empty state for week/month */}
               {p !== 'today' && summary.total === 0 && (
                 <div className="bg-vygo-card border border-vygo-border rounded-2xl p-8 text-center mb-4">
@@ -80,6 +109,9 @@ export function EarningsPage() {
                   <p className="text-vygo-secondary/50 text-xs mt-1">Se conectarán desde el backend</p>
                 </div>
               )}
+
+              {/* Contenido con datos — oculto si today sin actividad */}
+              {(p !== 'today' || todayEarnings > 0 || completedOrders > 0) && <>
 
               {/* Hero earnings */}
               <div className="bg-vygo-card border border-vygo-border rounded-2xl p-5 mb-4">
@@ -235,6 +267,8 @@ export function EarningsPage() {
                   </div>
                 )}
               </div>
+
+              </> /* fin bloque con datos */}
             </TabsContent>
           ))}
         </Tabs>
