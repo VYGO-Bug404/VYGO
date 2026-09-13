@@ -21,7 +21,8 @@ function distanceMeters(lat1: number, lng1: number, lat2: number, lng2: number) 
 export function useLocationTracking() {
   const userId = useAuthStore((s) => s.userId)
   const driverStatus = useDriverStore((s) => s.status)
-  const isActive = driverStatus !== 'offline' && !!userId
+  // For local/demo testing, allow tracking whenever geolocation is available
+  const isActive = driverStatus !== 'offline'
 
   const lastSentRef = useRef<{ lat: number; lng: number; at: number } | null>(null)
   const pendingRef = useRef<GeolocationPosition | null>(null)
@@ -31,14 +32,22 @@ export function useLocationTracking() {
   useEffect(() => {
     if (!isActive || !navigator.geolocation) return
 
+    const DEMO_USER_ID = 'b9acb1bb-ee96-59c0-9e84-31f29368c97b'
+    const targetUserId = (userId && userId !== 'driver-local') ? userId : DEMO_USER_ID
+
     const flush = async () => {
       const pos = pendingRef.current
-      if (!pos || !userId) return
+      if (!pos) return
 
       const { latitude: lat, longitude: lng, heading, accuracy, speed } = pos.coords
       const now = Date.now()
-      const last = lastSentRef.current
 
+      // Always keep localStorage fresh for immediate component reads
+      try {
+        localStorage.setItem('vygo-last-position', JSON.stringify({ lat, lng }))
+      } catch {}
+
+      const last = lastSentRef.current
       const movedEnough = !last || distanceMeters(last.lat, last.lng, lat, lng) >= MIN_DISTANCE_M
       const timeEnough = !last || now - last.at >= UPDATE_INTERVAL_MS
 
@@ -47,7 +56,7 @@ export function useLocationTracking() {
       const { error } = await supabase
         .from('ubicaciones_conductores')
         .upsert(
-          { user_id: userId, lat, lng, heading, accuracy, speed, updated_at: new Date().toISOString() },
+          { user_id: targetUserId, lat, lng, heading, accuracy, speed, updated_at: new Date().toISOString() },
           { onConflict: 'user_id' }
         )
 

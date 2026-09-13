@@ -55,7 +55,7 @@ export function OrderCard({ order, stopNumber, className, compact = false }: Ord
       <div className="flex items-center gap-3 text-xs text-vygo-secondary">
         <span className="flex items-center gap-1">
           <MapPin size={11} />
-          {formatDistance(order.distanceKm)}
+          {order.pickupDistanceKm !== undefined ? `A ${order.pickupDistanceKm} km · ${formatDistance(order.distanceKm)}` : formatDistance(order.distanceKm)}
         </span>
         <span className="flex items-center gap-1">
           <Clock size={11} />

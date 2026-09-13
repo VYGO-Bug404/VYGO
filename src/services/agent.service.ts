@@ -175,11 +175,31 @@ export async function decidir(
       const TURNO_TOTAL_MIN = 360 // 6h default
       const minutosRestantes = Math.max(0, TURNO_TOTAL_MIN - minutosTranscurridos)
 
+      const DEMO_USER_ID = 'b9acb1bb-ee96-59c0-9e84-31f29368c97b'
+      const targetUserId = (authStore.userId && authStore.userId !== 'driver-local')
+        ? authStore.userId
+        : DEMO_USER_ID
+
+      let effectivePos = posicion
+      if (!effectivePos) {
+        try {
+          const raw = localStorage.getItem('vygo-last-position')
+          if (raw) {
+            const p = JSON.parse(raw)
+            const lat = typeof p.lat === 'number' ? p.lat : undefined
+            const lon = typeof p.lon === 'number' ? p.lon : (typeof p.lng === 'number' ? p.lng : undefined)
+            if (lat !== undefined && lon !== undefined) effectivePos = { lat, lon }
+          }
+        } catch {}
+      }
+      if (!effectivePos) effectivePos = { lat: 25.6714, lon: -100.3094 }
+
       const body = {
         version: '1.0',
+        politica: 'HIBRIDO',
         repartidor: {
-          id: authStore.userId ?? 'driver-local',
-          posicion: posicion ?? { lat: 25.6714, lon: -100.3094 },
+          id: targetUserId,
+          posicion: effectivePos,
           vehiculo: driverStore.driver.vehicle.type ?? 'moto',
           capacidad: 3,
           minutos_turno_transcurridos: minutosTranscurridos,
@@ -213,7 +233,7 @@ export async function decidir(
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const data: RespuestaDecidir = await res.json()
       console.log(
-        `%c[VYGO Agent] ✅ agente_ppo · ${data.latencia_ms}ms · ${data.decisiones[0]?.decision} · ${data.decisiones[0]?.explicacion_corta}`,
+        `%c[VYGO Agent] ✅ ${data.politica ?? 'HÍBRIDO'} · ${data.latencia_ms}ms · ${data.decisiones[0]?.decision} · ${data.decisiones[0]?.explicacion_corta}`,
         'color:#6FA800;font-weight:bold'
       )
       // Sync live telemetria from backend into driver store
@@ -232,11 +252,15 @@ export async function decidir(
 }
 
 export function politicaLabel(p: Politica): string {
-  const labels: Record<Politica, string> = {
+  const labels: Record<string, string> = {
+    HIBRIDO: 'Agente Híbrido',
+    PPO: 'Agente RL',
     agente_ppo: 'Agente RL',
     agente_bc: 'Agente BC',
     B2_umbral: 'Regla umbral',
+    B2: 'Regla umbral',
     B1_simple: 'Simple',
+    B1: 'Simple',
   }
   return labels[p] ?? p
 }

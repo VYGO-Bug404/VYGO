@@ -29,6 +29,7 @@ export interface Order {
   pickup: Location
   dropoff: Location
   distanceKm: number
+  pickupDistanceKm?: number
   estimatedMinutes: number
   extraDistanceKm?: number
   extraMinutes?: number

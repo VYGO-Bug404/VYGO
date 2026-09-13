@@ -120,7 +120,7 @@ export function NewOrderSheet({ order }: NewOrderSheetProps) {
       })
     }
     await new Promise((r) => setTimeout(r, 600))
-    acceptOffer(order)
+    acceptOffer(order, agentResp?.plan)
   }
 
   return (
@@ -259,8 +259,8 @@ export function NewOrderSheet({ order }: NewOrderSheetProps) {
                 label="Tiempo extra"
               />
               <MetricPill
-                value={`+${formatDistance(eco ? eco.delta_distancia_km : (order.extraDistanceKm ?? order.distanceKm))}`}
-                label="Distancia"
+                value={`+${formatDistance(eco ? eco.delta_distancia_km : (order.extraDistanceKm ?? (order.pickupDistanceKm ? order.pickupDistanceKm + order.distanceKm : order.distanceKm)))}`}
+                label="Desvío total"
               />
             </div>
           </div>
@@ -278,7 +278,10 @@ export function NewOrderSheet({ order }: NewOrderSheetProps) {
                 <div className="flex-1 pb-3">
                   <p className="text-xs text-vygo-secondary uppercase tracking-wide font-medium mb-0.5">Recoger</p>
                   <p className="text-sm font-semibold text-vygo-white">{order.pickup.name ?? order.restaurantName}</p>
-                  <p className="text-xs text-vygo-secondary">{order.pickup.address} · {order.pickup.neighborhood}</p>
+                  <p className="text-xs text-vygo-secondary">
+                    {order.pickup.address} · {order.pickup.neighborhood}
+                    {order.pickupDistanceKm !== undefined ? ` (a ${order.pickupDistanceKm} km de ti)` : ''}
+                  </p>
                 </div>
               </div>
               <div className="flex gap-3">
@@ -288,7 +291,9 @@ export function NewOrderSheet({ order }: NewOrderSheetProps) {
                 <div className="flex-1">
                   <p className="text-xs text-vygo-secondary uppercase tracking-wide font-medium mb-0.5">Entregar</p>
                   <p className="text-sm font-semibold text-vygo-white">{order.dropoff.address}</p>
-                  <p className="text-xs text-vygo-secondary">{order.dropoff.neighborhood}</p>
+                  <p className="text-xs text-vygo-secondary">
+                    {order.dropoff.neighborhood} · Entrega de {order.distanceKm} km
+                  </p>
                 </div>
               </div>
             </div>

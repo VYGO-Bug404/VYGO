@@ -11,7 +11,7 @@ interface OrdersStore {
   _nextRouteNumber: number
 
   loadInitialData: () => Promise<void>
-  acceptOffer: (order: Order) => void
+  acceptOffer: (order: Order, agentPlan?: any) => void
   resetShift: () => void
   rejectOffer: () => void
   setPendingOffer: (order: Order) => void
@@ -57,7 +57,7 @@ export const useOrdersStore = create<OrdersStore>((set, get) => ({
 
   setPendingOffer: (order) => set({ pendingOffer: order }),
 
-  acceptOffer: (order) => {
+  acceptOffer: (order, agentPlan) => {
     const { _nextRouteNumber } = get()
     const accepted: Order = {
       ...order,
@@ -71,9 +71,13 @@ export const useOrdersStore = create<OrdersStore>((set, get) => ({
       _nextRouteNumber: state._nextRouteNumber + 1,
     }))
     useDriverStore.getState().setStatus('active_route')
-    // Build route from updated active orders
+    // Build route from updated active orders using agent sequence if available
     const updated = [...get().activeOrders]
-    useRouteStore.getState().buildRoute(updated)
+    if (agentPlan?.paradas && agentPlan.paradas.length > 0) {
+      useRouteStore.getState().buildRouteFromPlan(updated, agentPlan.paradas, agentPlan.geometria)
+    } else {
+      useRouteStore.getState().buildRoute(updated)
+    }
   },
 
   rejectOffer: () => set({ pendingOffer: null }),

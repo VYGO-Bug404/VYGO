@@ -83,6 +83,19 @@ function mapRow(row: any): Order {
   }
 }
 
+function getDriverPosition(): { lat: number; lng: number } {
+  try {
+    const raw = localStorage.getItem('vygo-last-position')
+    if (raw) {
+      const p = JSON.parse(raw)
+      const lat = typeof p.lat === 'number' ? p.lat : undefined
+      const lng = typeof p.lng === 'number' ? p.lng : (typeof p.lon === 'number' ? p.lon : undefined)
+      if (lat !== undefined && lng !== undefined) return { lat, lng }
+    }
+  } catch {}
+  return { lat: 25.6714, lng: -100.3094 } // Macroplaza Centro MTY
+}
+
 let _offerPool: Order[] = []
 
 export const ordersService = {
@@ -124,15 +137,32 @@ export const ordersService = {
     _offerPool = (data ?? []).map(mapRow)
   },
 
-  generateNewOffer(): Order {
+  generateNewOffer(customDriverPos?: { lat: number; lng: number }): Order {
     const pool = _offerPool.length > 0 ? _offerPool : []
     if (pool.length === 0) {
       throw new Error('Offer pool not loaded yet')
     }
-    const template = pool[Math.floor(Math.random() * pool.length)]
+    const driverPos = customDriverPos ?? getDriverPosition()
+
+    // Regla de radio oficial (§Paso 0): restaurante dentro de 2.0 km del repartidor
+    const MAX_RADIO_KM = 2.0
+    const candidatos = pool.map((t) => {
+      const pickupDist = parseFloat(
+        haversineKm(driverPos.lat, driverPos.lng, t.pickup.lat, t.pickup.lng).toFixed(1)
+      )
+      return { template: t, pickupDist }
+    })
+
+    const enRadio = candidatos.filter((c) => c.pickupDist <= MAX_RADIO_KM)
+    // Si hay órdenes dentro del radio de 2 km, selecciona una de ellas; si no, toma la más próxima
+    const seleccionado = enRadio.length > 0
+      ? enRadio[Math.floor(Math.random() * enRadio.length)]
+      : candidatos.sort((a, b) => a.pickupDist - b.pickupDist)[0]
+
     return {
-      ...template,
+      ...seleccionado.template,
       id: `offer-${Date.now()}`,
+      pickupDistanceKm: seleccionado.pickupDist,
       status: 'offered',
       createdAt: new Date(),
       expiresAt: new Date(Date.now() + 30_000),

@@ -39,7 +39,7 @@ function getSavedPosition(): [number, number] {
 }
 
 function savePosition(lng: number, lat: number) {
-  try { localStorage.setItem(LOCATION_KEY, JSON.stringify({ lng, lat })) } catch {}
+  try { localStorage.setItem(LOCATION_KEY, JSON.stringify({ lng, lat, lon: lng })) } catch {}
 }
 
 const PLATFORM_COLORS: Record<string, string> = {
