@@ -48,7 +48,7 @@ const PLATFORM_COLORS: Record<string, string> = {
   didi: '#F97316',
 }
 
-const KEY = import.meta.env.VITE_MAPTILER_KEY
+const KEY = import.meta.env.VITE_MAPTILER_KEY || 'YCKX2ukadzz48kPBnfcK'
 
 function buildStyle(): StyleSpecification {
   // Raster tiles — simpler and more reliable than fetching a style JSON

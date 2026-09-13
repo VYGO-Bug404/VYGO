@@ -3,7 +3,7 @@ import type { Order } from '@/types/order'
 import { useDriverStore } from '@/stores/driver.store'
 import { useAuthStore } from '@/stores/auth.store'
 
-const AGENT_URL = import.meta.env.VITE_AGENT_URL || (import.meta.env.PROD ? 'https://vygo-backend.onrender.com' : 'http://localhost:8000')
+const AGENT_URL = import.meta.env.VITE_AGENT_URL || 'https://vygo-backend.onrender.com'
 const TIMEOUT_MS = 12000
 // Tasa de referencia MTY cuando el repartidor aún no ha completado pedidos
 const BASELINE_RHO_MXN_H = 120
