@@ -108,9 +108,12 @@ export const useOrdersStore = create<OrdersStore>((set, get) => ({
   },
 
   simulateNewOrder: () => {
-    const offer = ordersService.generateNewOffer()
-    // Use unified ρ from driver store
-    offer.currentEarningsPerHour = useDriverStore.getState().earningsPerHour
-    set({ pendingOffer: offer })
+    try {
+      const offer = ordersService.generateNewOffer()
+      offer.currentEarningsPerHour = useDriverStore.getState().earningsPerHour
+      set({ pendingOffer: offer })
+    } catch {
+      console.warn('[orders] Pool vacío — no hay pedidos en la BD')
+    }
   },
 }))
