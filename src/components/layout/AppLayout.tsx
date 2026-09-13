@@ -54,19 +54,6 @@ export function AppLayout() {
           'lg:shadow-phone',
         ].join(' ')}
       >
-        {/* Dynamic island — desktop only */}
-        <div className="hidden lg:flex absolute top-3 left-1/2 -translate-x-1/2 z-50
-                        w-[110px] h-[30px] bg-[#0F1340] rounded-full
-                        items-center justify-center gap-2 pointer-events-none">
-          <div className="w-2 h-2 rounded-full bg-[#1a2055]" />
-          <div className="w-5 h-1.5 rounded-full bg-[#1a2055]" />
-        </div>
-
-        {/* Side buttons — desktop only */}
-        <div className="hidden lg:block absolute left-[-18px] top-28 w-[8px] h-10 bg-[#141860] rounded-l-md" />
-        <div className="hidden lg:block absolute left-[-18px] top-44 w-[8px] h-14 bg-[#141860] rounded-l-md" />
-        <div className="hidden lg:block absolute left-[-18px] top-[248px] w-[8px] h-14 bg-[#141860] rounded-l-md" />
-        <div className="hidden lg:block absolute right-[-18px] top-36 w-[8px] h-20 bg-[#141860] rounded-r-md" />
 
         {/* ── Content ── */}
         {isRouteScreen ? (
