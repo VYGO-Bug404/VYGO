@@ -4,12 +4,20 @@ import path from 'path'
 
 export default defineConfig({
   plugins: [react()],
-  optimizeDeps: {
-    exclude: ['maplibre-gl'],
-  },
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
+    },
+  },
+  build: {
+    rollupOptions: {
+      output: {
+        // Agrupa maplibre-gl en un chunk propio con extensión .js estándar
+        // para evitar que Vercel sirva el chunk .mjs con MIME type incorrecto
+        manualChunks(id) {
+          if (id.includes('maplibre-gl')) return 'maplibre'
+        },
+      },
     },
   },
 })
