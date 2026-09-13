@@ -93,7 +93,9 @@ export function ActiveRoutePage() {
 
     try {
       const routeData = await obtenerRutaAstar(pos, destinations)
-      if (routeData?.coordinates && routeData.coordinates.length >= 2) {
+      // Solo actualizar si la ruta devuelta tiene densidad vial real (A* > 5 puntos)
+      // para evitar que un fallback recto sobreescriba una ruta existente de alta fidelidad
+      if (routeData?.coordinates && routeData.coordinates.length > 5) {
         setRouteGeoJSON({
           type: 'LineString',
           coordinates: routeData.coordinates,
@@ -106,9 +108,12 @@ export function ActiveRoutePage() {
     }
   }, [activeOrders, activeRoute, currentStopIndex, setRouteGeoJSON])
 
-  // Recalcular ruta al montar la pantalla o cuando cambia la parada en curso
+  // Solo recalcular si NO existe ya una ruta vial cargada en el store
   useEffect(() => {
-    recalculateRoute(driverPos)
+    const existing = useRouteStore.getState().routeGeoJSON
+    if (!existing || !existing.coordinates || existing.coordinates.length <= 2) {
+      recalculateRoute(driverPos)
+    }
   }, [currentStopIndex, activeOrders.length])
 
   const { tryEndShift, confirming, confirmEnd, cancelConfirm } = useEndShift()

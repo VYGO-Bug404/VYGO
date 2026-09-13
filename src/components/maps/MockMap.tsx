@@ -130,33 +130,21 @@ export function MockMap({
             type: 'geojson',
             data: { type: 'FeatureCollection', features: [] },
           })
-          map!.addLayer({
-            id: 'route-shadow',
-            type: 'line',
-            source: 'route',
-            layout: { 'line-cap': 'round', 'line-join': 'round' },
-            paint: { 'line-color': '#0F172A', 'line-width': 12, 'line-opacity': 0.25, 'line-blur': 2 },
-          })
+          // Casing blanco (halo)
           map!.addLayer({
             id: 'route-casing',
             type: 'line',
             source: 'route',
             layout: { 'line-cap': 'round', 'line-join': 'round' },
-            paint: { 'line-color': '#FFFFFF', 'line-width': 9, 'line-opacity': 0.95 },
+            paint: { 'line-color': '#FFFFFF', 'line-width': 8, 'line-opacity': 0.5 },
           })
+          // Línea verde VYGO
           map!.addLayer({
             id: 'route-line',
             type: 'line',
             source: 'route',
             layout: { 'line-cap': 'round', 'line-join': 'round' },
-            paint: { 'line-color': '#6FA800', 'line-width': 6, 'line-opacity': 1.0 },
-          })
-          map!.addLayer({
-            id: 'route-inner-glow',
-            type: 'line',
-            source: 'route',
-            layout: { 'line-cap': 'round', 'line-join': 'round' },
-            paint: { 'line-color': '#BEF264', 'line-width': 2.5, 'line-opacity': 0.85 },
+            paint: { 'line-color': '#6FA800', 'line-width': 4 },
           })
           setReady(true)
         })
@@ -187,51 +175,20 @@ export function MockMap({
     const src = map.getSource('route') as GeoJSONSource | undefined
     if (!src) return
 
-    let validFeature = false
-    let activeCoords: [number, number][] = []
+    src.setData(
+      routeGeoJSON
+        ? { type: 'Feature', geometry: routeGeoJSON, properties: {} }
+        : { type: 'FeatureCollection', features: [] }
+    )
 
     if (routeGeoJSON?.coordinates && routeGeoJSON.coordinates.length >= 2) {
-      activeCoords = routeGeoJSON.coordinates
-      validFeature = true
-    } else if (activeOrders.length > 0) {
-      // Fallback inmediato para que la línea jamás desaparezca en el mapa
-      const saved = getSavedPosition()
-      const fallbackCoords: [number, number][] = [saved]
-      activeOrders.forEach((o) => {
-        if (o.status !== 'picked_up') fallbackCoords.push([o.pickup.lng, o.pickup.lat])
-        fallbackCoords.push([o.dropoff.lng, o.dropoff.lat])
-      })
-      if (fallbackCoords.length >= 2) {
-        activeCoords = fallbackCoords
-        validFeature = true
-      }
-    }
-
-    if (validFeature && activeCoords.length >= 2) {
-      src.setData({
-        type: 'FeatureCollection',
-        features: [
-          {
-            type: 'Feature',
-            geometry: {
-              type: 'LineString',
-              coordinates: activeCoords,
-            },
-            properties: {},
-          },
-        ],
-      })
-
-      // Enmarcar cámara para que el repartidor vea el trayecto completo
       const bounds = new LngLatBounds()
-      activeCoords.forEach(([lng, lat]) => bounds.extend([lng, lat]))
+      routeGeoJSON.coordinates.forEach(([lng, lat]) => bounds.extend([lng, lat]))
       if (!bounds.isEmpty()) {
         map.fitBounds(bounds, { padding: 80, maxZoom: 15, duration: 800 })
       }
-    } else {
-      src.setData({ type: 'FeatureCollection', features: [] })
     }
-  }, [routeGeoJSON, activeOrders, ready])
+  }, [routeGeoJSON, ready])
 
   // ── Pickup + Dropoff markers ──────────────────────────────
   useEffect(() => {
@@ -347,33 +304,6 @@ export function MockMap({
       savePosition(lng, lat)
       if (followDriverRef.current && mapRef.current) {
         mapRef.current.easeTo({ center: lngLat, duration: 600, essential: true })
-      }
-
-      // Dynamic route slicing: recortar segmentos ya recorridos y anclar al vehículo
-      const currentRoute = routeGeoJSONRef.current
-      if (currentRoute?.coordinates && currentRoute.coordinates.length > 2 && mapRef.current) {
-        const src = mapRef.current.getSource('route') as GeoJSONSource | undefined
-        if (src) {
-          const coords = currentRoute.coordinates
-          let bestIdx = 0
-          let minDist = Infinity
-          for (let i = 0; i < coords.length; i++) {
-            const d = (coords[i][0] - lng) ** 2 + (coords[i][1] - lat) ** 2
-            if (d < minDist) {
-              minDist = d
-              bestIdx = i
-            }
-          }
-          // Si está a menos de ~300m (0.003 deg) de algún punto de la ruta, recortamos los puntos anteriores
-          if (minDist < 0.000009 && bestIdx > 0 && bestIdx < coords.length - 1) {
-            const activeCoords: [number, number][] = [[lng, lat], ...coords.slice(bestIdx + 1)]
-            src.setData({
-              type: 'Feature',
-              geometry: { type: 'LineString', coordinates: activeCoords },
-              properties: {},
-            })
-          }
-        }
       }
     }
 
