@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { formatCurrency, formatDistance, formatMinutes } from '@/lib/utils'
 import { cn } from '@/lib/utils'
 import { decidir, politicaLabel } from '@/services/agent.service'
+import { fetchStreetRoute } from '@/services/routing.service'
 import type { RespuestaDecidir, DecisionOferta } from '@/lib/vygoAgent'
 import type { Order } from '@/types/order'
 
@@ -98,27 +99,37 @@ export function NewOrderSheet({ order }: NewOrderSheetProps) {
   const handleAccept = async () => {
     setAccepting(true)
     setAccepted(true)
-    // Store route geometry from backend so the map can render it
-    const geo = agentResp?.plan?.geometria
-    if (geo && geo.coordinates && geo.coordinates.length > 1) {
-      setRouteGeoJSON(geo)
+
+    const backendGeo = agentResp?.plan?.geometria
+    if (backendGeo && backendGeo.coordinates?.length > 1) {
+      setRouteGeoJSON(backendGeo)
     } else {
-      // Fallback geometry connecting driver -> pickup -> dropoff
+      // Get driver's last known position
       let pos: [number, number] = [-100.3094, 25.6714]
       try {
         const raw = localStorage.getItem('vygo-last-position')
         if (raw) {
           const p = JSON.parse(raw)
-          if (typeof p.lat === 'number' && typeof p.lng === 'number') {
-            pos = [p.lng, p.lat]
-          }
+          if (typeof p.lat === 'number' && typeof p.lng === 'number') pos = [p.lng, p.lat]
         }
       } catch {}
-      setRouteGeoJSON({
-        type: 'LineString',
-        coordinates: [pos, [order.pickup.lng, order.pickup.lat], [order.dropoff.lng, order.dropoff.lat]],
+
+      const waypoints: [number, number][] = [
+        pos,
+        [order.pickup.lng, order.pickup.lat],
+        [order.dropoff.lng, order.dropoff.lat],
+      ]
+
+      // Add any active order dropoffs to build a full multi-stop route
+      activeOrders.forEach((o) => {
+        if (o.status !== 'picked_up') waypoints.push([o.pickup.lng, o.pickup.lat])
+        waypoints.push([o.dropoff.lng, o.dropoff.lat])
       })
+
+      const streetGeo = await fetchStreetRoute(waypoints)
+      setRouteGeoJSON(streetGeo ?? { type: 'LineString', coordinates: waypoints })
     }
+
     await new Promise((r) => setTimeout(r, 600))
     acceptOffer(order, agentResp?.plan)
   }
