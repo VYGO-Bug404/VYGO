@@ -64,7 +64,11 @@ export const useRouteStore = create<RouteStore>((set, get) => ({
       startedAt: now,
     }
 
-    set({ activeRoute, currentStopIndex: 0, routeGeoJSON: geo ?? get().routeGeoJSON })
+    // Preserve OSRM geometry if already set (≥20 coords = real streets).
+    // Agent A* returns only ~9 sparse waypoints — don't let it override OSRM.
+    const existing = get().routeGeoJSON
+    const keepExisting = existing && existing.coordinates.length >= 20
+    set({ activeRoute, currentStopIndex: 0, routeGeoJSON: keepExisting ? existing : (geo ?? existing) })
   },
 
   buildRoute: (orders) => {
