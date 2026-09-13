@@ -65,10 +65,38 @@ export const useRouteStore = create<RouteStore>((set, get) => ({
     }
 
     // Preserve OSRM geometry if already set (≥20 coords = real streets).
-    // Agent A* returns only ~9 sparse waypoints — don't let it override OSRM.
     const existing = get().routeGeoJSON
     const keepExisting = existing && existing.coordinates.length >= 20
-    set({ activeRoute, currentStopIndex: 0, routeGeoJSON: keepExisting ? existing : (geo ?? existing) })
+
+    // Always guarantee at least a straight-line fallback so the map shows something
+    const fallback: RouteGeoJSON = {
+      type: 'LineString',
+      coordinates: orders.flatMap((o): [number, number][] => {
+        const pts: [number, number][] = []
+        if (o.status !== 'picked_up') pts.push([o.pickup.lng, o.pickup.lat])
+        pts.push([o.dropoff.lng, o.dropoff.lat])
+        return pts
+      }),
+    }
+
+    set({ activeRoute, currentStopIndex: 0, routeGeoJSON: keepExisting ? existing : (geo ?? existing ?? fallback) })
+
+    // If geometry is sparse (agent fallback / straight lines), upgrade with OSRM street routing
+    if (!keepExisting) {
+      const waypoints: [number, number][] = orders.flatMap((o): [number, number][] => {
+        const pts: [number, number][] = []
+        if (o.status !== 'picked_up') pts.push([o.pickup.lng, o.pickup.lat])
+        pts.push([o.dropoff.lng, o.dropoff.lat])
+        return pts
+      })
+      if (waypoints.length >= 2) {
+        fetchStreetRoute(waypoints).then((streetGeo) => {
+          if (streetGeo && streetGeo.coordinates.length > 10) {
+            set({ routeGeoJSON: streetGeo })
+          }
+        })
+      }
+    }
   },
 
   buildRoute: (orders) => {
