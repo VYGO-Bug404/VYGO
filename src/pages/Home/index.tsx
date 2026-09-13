@@ -54,38 +54,66 @@ export function HomePage() {
 
           <div className="flex flex-col gap-4 px-4 pb-6 flex-1">
 
-            {/* Hero card — VYGO value prop */}
+            {/* Hero card — personalizado con datos reales */}
             <div className="relative overflow-hidden rounded-3xl bg-vygo-green p-5">
               <div className="absolute -top-8 -right-8 w-40 h-40 rounded-full bg-white/10" />
               <div className="absolute -bottom-6 -left-4 w-28 h-28 rounded-full bg-white/8" />
               <div className="relative">
-                <div className="flex items-center gap-2 mb-3">
-                  <div className="w-8 h-8 rounded-xl bg-white/20 flex items-center justify-center">
-                    <Zap size={16} className="text-white" />
-                  </div>
-                  <span className="text-white font-bold text-sm">Copiloto activo</span>
-                </div>
-                <p className="text-white font-black text-2xl leading-tight mb-1">
-                  Gana más.<br />Maneja menos.
-                </p>
-                <p className="text-white/75 text-xs leading-relaxed">
-                  VYGO evalúa cada oferta y solo te muestra<br />
-                  las que mejoran tu tasa $/hora.
-                </p>
-                <div className="flex items-center gap-3 mt-4">
-                  <div className="bg-white/20 rounded-xl px-3 py-1.5 text-center">
-                    <p className="text-white font-black text-base leading-none">+66%</p>
-                    <p className="text-white/70 text-[10px] mt-0.5">vs sin VYGO</p>
-                  </div>
-                  <div className="bg-white/20 rounded-xl px-3 py-1.5 text-center">
-                    <p className="text-white font-black text-base leading-none">$169/h</p>
-                    <p className="text-white/70 text-[10px] mt-0.5">promedio</p>
-                  </div>
-                  <div className="bg-white/20 rounded-xl px-3 py-1.5 text-center">
-                    <p className="text-white font-black text-base leading-none">&lt;1ms</p>
-                    <p className="text-white/70 text-[10px] mt-0.5">decisión</p>
-                  </div>
-                </div>
+                {hasActivity ? (
+                  /* Usuario con actividad hoy — muestra sus datos reales */
+                  <>
+                    <div className="flex items-center gap-2 mb-3">
+                      <div className="w-8 h-8 rounded-xl bg-white/20 flex items-center justify-center">
+                        <TrendingUp size={16} className="text-white" />
+                      </div>
+                      <span className="text-white font-bold text-sm">Tu jornada de hoy</span>
+                    </div>
+                    <p className="text-white font-black text-2xl leading-tight mb-3">
+                      {formatCurrency(todayEarnings)}
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <div className="bg-white/20 rounded-xl px-3 py-1.5 text-center flex-1">
+                        <p className="text-white font-black text-base leading-none">
+                          {completedOrders}
+                        </p>
+                        <p className="text-white/70 text-[10px] mt-0.5">
+                          {completedOrders === 1 ? 'entrega' : 'entregas'}
+                        </p>
+                      </div>
+                      <div className="bg-white/20 rounded-xl px-3 py-1.5 text-center flex-1">
+                        <p className="text-white font-black text-base leading-none">
+                          ${earningsPerHour}/h
+                        </p>
+                        <p className="text-white/70 text-[10px] mt-0.5">promedio real</p>
+                      </div>
+                      <div className="bg-white/20 rounded-xl px-3 py-1.5 text-center flex-1">
+                        <p className="text-white font-black text-base leading-none">
+                          {completedOrders > 0
+                            ? `$${Math.round(todayEarnings / completedOrders)}`
+                            : '—'}
+                        </p>
+                        <p className="text-white/70 text-[10px] mt-0.5">por entrega</p>
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  /* Sin actividad aún — estado listo, sin stats inventados */
+                  <>
+                    <div className="flex items-center gap-2 mb-3">
+                      <div className="w-8 h-8 rounded-xl bg-white/20 flex items-center justify-center">
+                        <Zap size={16} className="text-white" />
+                      </div>
+                      <span className="text-white font-bold text-sm">Copiloto listo</span>
+                    </div>
+                    <p className="text-white font-black text-2xl leading-tight mb-2">
+                      Cada oferta,<br />analizada al instante.
+                    </p>
+                    <p className="text-white/75 text-xs leading-relaxed">
+                      VYGO compara la tasa marginal de cada pedido<br />
+                      contra lo que ya llevas ganando por hora.
+                    </p>
+                  </>
+                )}
               </div>
             </div>
 
