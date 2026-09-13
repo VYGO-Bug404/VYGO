@@ -28,7 +28,7 @@ function orderToOferta(offer: Order) {
     destino: { lat: offer.dropoff.lat, lon: offer.dropoff.lng },
     precio_mxn: offer.earnings,
     listo_estimado_en: isoNow(cocina),
-    limite_en: isoNow((offer.estimatedMinutes ?? 30) + 40),
+    limite_en: isoNow(90),
     theta_frescura_min: theta,
     anillo: 1,
     ...(isSurge ? { contexto: { tipo_producto: 'caliente', surge: true } } : {}),
@@ -43,7 +43,7 @@ function orderToPlanActivo(order: Order) {
     origen: { lat: order.pickup.lat, lon: order.pickup.lng },
     destino: { lat: order.dropoff.lat, lon: order.dropoff.lng },
     listo_en: isoNow(2),
-    limite_en: isoNow((order.estimatedMinutes ?? 30) + 20),
+    limite_en: isoNow(60),
     theta_frescura_min: 25,
     recogido: order.status === 'picked_up',
   }
