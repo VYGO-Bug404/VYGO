@@ -175,6 +175,15 @@ export function MockMap({
         ? { type: 'Feature', geometry: routeGeoJSON, properties: {} }
         : { type: 'FeatureCollection', features: [] }
     )
+
+    // FIT CAMERA TO ROUTE: Frames the full street route so the courier sees it immediately
+    if (routeGeoJSON && routeGeoJSON.coordinates && routeGeoJSON.coordinates.length > 1) {
+      const bounds = new LngLatBounds()
+      routeGeoJSON.coordinates.forEach(([lng, lat]) => bounds.extend([lng, lat]))
+      if (!bounds.isEmpty()) {
+        map.fitBounds(bounds, { padding: 80, maxZoom: 15, duration: 800 })
+      }
+    }
   }, [routeGeoJSON, ready])
 
   // ── Pickup + Dropoff markers ──────────────────────────────
@@ -250,18 +259,19 @@ export function MockMap({
   // on the driver's last known position.
   useEffect(() => {
     const map = mapRef.current
-    if (!map || !ready || !fitToRoute || activeOrders.length === 0) return
+    if (!map || !ready || (!fitToRoute && !showFullRoute) || activeOrders.length === 0) return
 
     const bounds = new LngLatBounds()
+    bounds.extend(getSavedPosition())
     activeOrders.forEach((order) => {
       bounds.extend([order.pickup.lng, order.pickup.lat])
       bounds.extend([order.dropoff.lng, order.dropoff.lat])
     })
 
     if (!bounds.isEmpty()) {
-      map.fitBounds(bounds, { padding: 64, duration: 0, maxZoom: 16 })
+      map.fitBounds(bounds, { padding: 64, duration: 600, maxZoom: 15 })
     }
-  }, [activeOrders, ready, fitToRoute])
+  }, [activeOrders, ready, fitToRoute, showFullRoute])
 
   // ── Driver GPS marker ─────────────────────────────────────
   useEffect(() => {

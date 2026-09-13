@@ -22,11 +22,31 @@ export const useRouteStore = create<RouteStore>((set, get) => ({
 
   buildRoute: (orders) => {
     if (orders.length === 0) {
-      set({ activeRoute: null })
+      set({ activeRoute: null, routeGeoJSON: null })
       return
     }
     const route = routeService.buildRoute(orders)
-    set({ activeRoute: route, currentStopIndex: 0 })
+    let currentGeo = get().routeGeoJSON
+    if (!currentGeo || !currentGeo.coordinates || currentGeo.coordinates.length < 2) {
+      const coords: [number, number][] = []
+      try {
+        const raw = localStorage.getItem('vygo-last-position')
+        if (raw) {
+          const p = JSON.parse(raw)
+          if (typeof p.lng === 'number' && typeof p.lat === 'number') {
+            coords.push([p.lng, p.lat])
+          }
+        }
+      } catch {}
+      orders.forEach((o) => {
+        if (o.status !== 'picked_up') coords.push([o.pickup.lng, o.pickup.lat])
+        coords.push([o.dropoff.lng, o.dropoff.lat])
+      })
+      if (coords.length >= 2) {
+        currentGeo = { type: 'LineString', coordinates: coords }
+      }
+    }
+    set({ activeRoute: route, currentStopIndex: 0, routeGeoJSON: currentGeo })
   },
 
   advanceStop: () => {

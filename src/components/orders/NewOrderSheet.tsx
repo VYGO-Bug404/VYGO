@@ -48,7 +48,18 @@ export function NewOrderSheet({ order }: NewOrderSheetProps) {
 
   useEffect(() => {
     setLoading(true)
-    decidir(order, rhoActual, undefined, activeOrders).then((resp) => {
+    let pos: { lat: number; lon: number } | undefined = undefined
+    try {
+      const raw = localStorage.getItem('vygo-last-position')
+      if (raw) {
+        const p = JSON.parse(raw)
+        if (typeof p.lat === 'number' && typeof p.lng === 'number') {
+          pos = { lat: p.lat, lon: p.lng }
+        }
+      }
+    } catch {}
+
+    decidir(order, rhoActual, pos, activeOrders).then((resp) => {
       setAgentResp(resp)
       setLoading(false)
     })
@@ -76,8 +87,24 @@ export function NewOrderSheet({ order }: NewOrderSheetProps) {
     setAccepted(true)
     // Store route geometry from backend so the map can render it
     const geo = agentResp?.plan?.geometria
-    if (geo && geo.coordinates.length > 1) {
+    if (geo && geo.coordinates && geo.coordinates.length > 1) {
       setRouteGeoJSON(geo)
+    } else {
+      // Fallback geometry connecting driver -> pickup -> dropoff
+      let pos: [number, number] = [-100.3094, 25.6714]
+      try {
+        const raw = localStorage.getItem('vygo-last-position')
+        if (raw) {
+          const p = JSON.parse(raw)
+          if (typeof p.lat === 'number' && typeof p.lng === 'number') {
+            pos = [p.lng, p.lat]
+          }
+        }
+      } catch {}
+      setRouteGeoJSON({
+        type: 'LineString',
+        coordinates: [pos, [order.pickup.lng, order.pickup.lat], [order.dropoff.lng, order.dropoff.lat]],
+      })
     }
     await new Promise((r) => setTimeout(r, 600))
     acceptOffer(order)
@@ -214,8 +241,14 @@ export function NewOrderSheet({ order }: NewOrderSheetProps) {
           <div className="px-5 pb-3">
             <div className="grid grid-cols-3 gap-2">
               <MetricPill value={formatCurrency(order.earnings)} label="Ganancia" highlight />
-              <MetricPill value={`+${formatMinutes(order.extraMinutes ?? order.estimatedMinutes)}`} label="Tiempo extra" />
-              <MetricPill value={`+${formatDistance(order.extraDistanceKm ?? order.distanceKm)}`} label="Distancia" />
+              <MetricPill
+                value={`+${formatMinutes(eco ? eco.delta_tiempo_min : (order.extraMinutes ?? order.estimatedMinutes))}`}
+                label="Tiempo extra"
+              />
+              <MetricPill
+                value={`+${formatDistance(eco ? eco.delta_distancia_km : (order.extraDistanceKm ?? order.distanceKm))}`}
+                label="Distancia"
+              />
             </div>
           </div>
 

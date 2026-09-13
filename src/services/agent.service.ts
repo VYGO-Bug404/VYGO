@@ -4,12 +4,22 @@ import { useDriverStore } from '@/stores/driver.store'
 import { useAuthStore } from '@/stores/auth.store'
 
 const AGENT_URL = import.meta.env.VITE_AGENT_URL
-const TIMEOUT_MS = 2500
+const TIMEOUT_MS = 12000
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function isoNow(offsetMin = 0) {
   return new Date(Date.now() + offsetMin * 60_000).toISOString()
+}
+
+function haversineM(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371
+  const dLat = ((lat2 - lat1) * Math.PI) / 180
+  const dLon = ((lon2 - lon1) * Math.PI) / 180
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLon / 2) ** 2
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
 }
 
 function orderToOferta(offer: Order) {
@@ -49,16 +59,28 @@ function orderToPlanActivo(order: Order) {
   }
 }
 
-// ─── Fallback B2: regla de umbral local ──────────────────────────────────────
-function b2Fallback(offer: Order, rhoActual: number): RespuestaDecidir {
+// ─── Fallback B2: regla de umbral local con geometría visible ─────────────────
+function b2Fallback(offer: Order, rhoActual: number, posicion?: { lat: number; lon: number }): RespuestaDecidir {
+  const pDriver = posicion ?? { lat: 25.6714, lon: -100.3094 }
+  const d1 = haversineM(pDriver.lat, pDriver.lon, offer.pickup.lat, offer.pickup.lng) * 1.35
+  const d2 = haversineM(offer.pickup.lat, offer.pickup.lng, offer.dropoff.lat, offer.dropoff.lng) * 1.35
+  const deltaDistancia = Number((d1 + d2).toFixed(1))
+  const deltaTiempo = Math.max(5, Math.round((deltaDistancia / 28) * 60 + 5))
   const tarifa = offer.earnings
-  const deltaTiempo = offer.extraMinutes ?? offer.estimatedMinutes
-  const deltaDistancia = offer.extraDistanceKm ?? offer.distanceKm
-  const costoMarginal = deltaDistancia * 2.5
-  const gananciaNeta = tarifa - costoMarginal
-  const tasaMarginal = deltaTiempo > 0 ? (gananciaNeta / deltaTiempo) * 60 : 0
+  const costoMarginal = Number((deltaDistancia * 2.5 + deltaTiempo * 0.5).toFixed(2))
+  const gananciaNeta = Number((tarifa - costoMarginal).toFixed(2))
+  let tasaMarginal = deltaTiempo > 0 ? (gananciaNeta / (deltaTiempo / 60)) : 0
+  tasaMarginal = Math.min(Math.max(tasaMarginal, 0), 450)
   const umbralSuperado = tasaMarginal > rhoActual
   const ajuste = rhoActual * 0.08
+
+  const coords: [number, number][] = [
+    [pDriver.lon, pDriver.lat],
+    [pDriver.lon + (offer.pickup.lng - pDriver.lon) * 0.4, pDriver.lat + (offer.pickup.lat - pDriver.lat) * 0.4],
+    [offer.pickup.lng, offer.pickup.lat],
+    [offer.pickup.lng + (offer.dropoff.lng - offer.pickup.lng) * 0.5, offer.pickup.lat + (offer.dropoff.lat - offer.pickup.lat) * 0.5],
+    [offer.dropoff.lng, offer.dropoff.lat],
+  ]
 
   return {
     version: '1.0',
@@ -102,7 +124,7 @@ function b2Fallback(offer: Order, rhoActual: number): RespuestaDecidir {
     plan: {
       viaje_id: `plan-${offer.id}`,
       paradas: [],
-      geometria: { type: 'LineString', coordinates: [] },
+      geometria: { type: 'LineString', coordinates: coords },
       resumen: {
         paradas_totales: 2,
         pedidos_a_bordo: 1,
@@ -202,7 +224,7 @@ export async function decidir(
   }
 
   const source = AGENT_URL ? 'b2_fallback' : 'static'
-  return { ...b2Fallback(offer, rhoActual), _source: source }
+  return { ...b2Fallback(offer, rhoActual, posicion), _source: source }
 }
 
 export function politicaLabel(p: Politica): string {
