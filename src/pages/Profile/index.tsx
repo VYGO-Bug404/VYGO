@@ -2,6 +2,7 @@ import { useState } from 'react'
 import {
   User,
   Bike,
+  Car,
   Bell,
   HelpCircle,
   LogOut,
@@ -14,9 +15,11 @@ import { useDriverStore } from '@/stores/driver.store'
 import { useAuthStore } from '@/stores/auth.store'
 import { useEndShift } from '@/hooks/useEndShift'
 import { usePlatformConnections } from '@/hooks/usePlatformConnections'
+import { useTodayMetrics } from '@/hooks/useTodayMetrics'
 import { EndShiftConfirm } from '@/components/EndShiftConfirm'
 import { PlatformBadge } from '@/components/PlatformBadge'
 import { PlatformConnectModal } from '@/components/PlatformConnectModal'
+import { VehicleModal } from '@/components/VehicleModal'
 import { PageHeader } from '@/components/layout/PageHeader'
 import type { Platform } from '@/types/order'
 
@@ -24,12 +27,12 @@ export function ProfilePage() {
   const navigate = useNavigate()
   const driver = useDriverStore((s) => s.driver)
   const status = useDriverStore((s) => s.status)
-  const todayEarnings = useDriverStore((s) => s.todayEarnings)
-  const completedOrders = useDriverStore((s) => s.completedOrders)
+  const { todayEarnings, completedOrders } = useTodayMetrics()
   const logout = useAuthStore((s) => s.logout)
   const { tryEndShift, confirming, confirmEnd, cancelConfirm, activeOrders } = useEndShift()
   const { connections, loading: loadingPlatforms } = usePlatformConnections()
   const [showPlatformModal, setShowPlatformModal] = useState(false)
+  const [showVehicleModal, setShowVehicleModal] = useState(false)
 
   const handleLogout = async () => {
     await logout()
@@ -39,11 +42,12 @@ export function ProfilePage() {
   const menuItems = [
     { icon: User, label: 'Información personal', subtitle: driver.name },
     {
-      icon: Bike,
+      icon: driver.vehicle.type === 'car' ? Car : Bike,
       label: 'Vehículo',
-      subtitle: driver.vehicle.brand
-        ? `${driver.vehicle.type === 'moto' ? 'Moto' : 'Auto'} · ${driver.vehicle.brand} ${driver.vehicle.model}`
+      subtitle: driver.vehicle.model || driver.vehicle.brand
+        ? `${driver.vehicle.type === 'moto' ? 'Moto' : 'Coche'} · ${[driver.vehicle.brand, driver.vehicle.model].filter(Boolean).join(' ')}${driver.vehicle.year ? ` (${driver.vehicle.year})` : ''}`
         : 'Sin configurar',
+      onPress: () => setShowVehicleModal(true),
     },
     {
       icon: Shield,
@@ -163,6 +167,10 @@ export function ProfilePage() {
 
       {showPlatformModal && (
         <PlatformConnectModal onClose={() => setShowPlatformModal(false)} />
+      )}
+
+      {showVehicleModal && (
+        <VehicleModal onClose={() => setShowVehicleModal(false)} />
       )}
     </div>
   )

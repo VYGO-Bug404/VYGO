@@ -7,87 +7,37 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { earningsService } from '@/services/earnings.service'
 import { useDriverStore } from '@/stores/driver.store'
 import { useOrdersStore } from '@/stores/orders.store'
+import { buildEarningsSummary, getTodayRange } from '@/lib/earningsAggregation'
 
 import { formatCurrency, formatDistance, formatMinutes } from '@/lib/utils'
 import { cn } from '@/lib/utils'
-import type { Platform, Order } from '@/types/order'
-import type { PlatformEarning } from '@/types/earnings'
+import type { Platform } from '@/types/order'
 
 export function EarningsPage() {
   const [period, setPeriod] = useState<'today' | 'week' | 'month'>('today')
-  const todayEarnings = useDriverStore((s) => s.todayEarnings)
-  const earningsPerHour = useDriverStore((s) => s.earningsPerHour)
-  const completedOrders = useDriverStore((s) => s.completedOrders)
   const shiftStartedAt = useDriverStore((s) => s.shiftStartedAt)
   const vygoGainMxn = useDriverStore((s) => s.vygoGainMxn)
   const vygoKmSaved = useDriverStore((s) => s.vygoKmSaved)
   const vygoMinutesSaved = useDriverStore((s) => s.vygoMinutesSaved)
   const completedOrdersList = useOrdersStore((s) => s.completedOrders)
 
-  // ── Cálculos reales para "Hoy" desde los pedidos completados ────────────────
-  const totalKm = completedOrdersList.reduce((s, o) => s + o.distanceKm, 0)
-  const perKm = totalKm > 0 ? todayEarnings / totalKm : 0
-
-  // Agrupar ganancias por hora usando deliveredAt
-  const hourMap: Record<number, { earnings: number; orders: number }> = {}
-  for (const o of completedOrdersList) {
-    if (!o.deliveredAt) continue
-    const h = o.deliveredAt.getHours()
-    if (!hourMap[h]) hourMap[h] = { earnings: 0, orders: 0 }
-    hourMap[h].earnings += o.earnings
-    hourMap[h].orders += 1
-  }
-  const hourly = Object.entries(hourMap)
-    .sort(([a], [b]) => Number(a) - Number(b))
-    .map(([hour, d]) => {
-      const h = Number(hour)
-      return { hour: h, label: `${h % 12 || 12}${h < 12 ? 'AM' : 'PM'}`, earnings: d.earnings, orders: d.orders }
-    })
-  const bestHour = hourly.reduce(
-    (best, h) => (h.earnings > best.earnings ? h : best),
-    { hour: 0, label: '', earnings: 0, orders: 0 }
-  )
-  const bestHourRange = bestHour.earnings > 0 ? `${bestHour.label} – ${(bestHour.hour + 1) % 24}:00` : '—'
-
-  // B1 baseline ($102/h) para comparativa VYGO
-  const B1_RATE = 102
-  const horasWorked = shiftStartedAt
-    ? Math.max((Date.now() - shiftStartedAt.getTime()) / 3_600_000, 0.01)
-    : (completedOrders > 0 ? completedOrders * 0.3 : 0)
-  const b1Estimated = Math.round(B1_RATE * horasWorked)
-  const b1Gain = Math.max(0, todayEarnings - b1Estimated)
-
-  // Usar ganancia real de VYGO (rechazos correctos) si supera estimado B1
-  const additionalEarnings = Math.max(vygoGainMxn, b1Gain)
-  const kmSaved = vygoKmSaved > 0 ? vygoKmSaved : Math.round(completedOrders * 2.1)
-  const minutesSaved = vygoMinutesSaved > 0 ? vygoMinutesSaved : Math.round(completedOrders * 8)
-  const pctMejora = b1Estimated > 0
-    ? Math.round(((todayEarnings - b1Estimated) / b1Estimated) * 100)
-    : 0
-
-  const mockSummary = earningsService.getSummary(period)
+  const elapsedHours = shiftStartedAt
+    ? Math.max((Date.now() - shiftStartedAt.getTime()) / 3_600_000, 0)
+    : undefined
 
   const summary = period === 'today'
     ? {
-        ...mockSummary,
-        total: todayEarnings,
-        perHour: earningsPerHour,
-        perKm: Math.round(perKm * 10) / 10,
-        totalKm: Math.round(totalKm * 10) / 10,
-        totalOrders: completedOrders,
-        hourly,
-        bestHourRange,
-        bestHourEarnings: bestHour.earnings,
-        additionalEarningsFromVygo: additionalEarnings,
-        kmSaved,
-        minutesSaved,
-        byPlatform: completedOrdersList.length > 0
-          ? buildPlatformBreakdown(completedOrdersList)
-          : [],
+        ...buildEarningsSummary(completedOrdersList, getTodayRange(), { elapsedHours }),
+        additionalEarningsFromVygo: vygoGainMxn,
+        kmSaved: vygoKmSaved,
+        minutesSaved: vygoMinutesSaved,
       }
-    : mockSummary
+    : earningsService.getSummary(period)
 
-  const vygoImpactPct = pctMejora
+  const todayEarnings = summary.total
+  const completedOrders = summary.totalOrders
+  const lifetimeTotal = completedOrdersList.reduce((s, o) => s + o.earnings, 0)
+  const lifetimeCount = completedOrdersList.length
 
   return (
     <div className="flex flex-col min-h-full">
@@ -115,29 +65,20 @@ export function EarningsPage() {
                   <p className="text-vygo-secondary text-sm mb-4">
                     Inicia una jornada y acepta pedidos para ver tus resultados aquí.
                   </p>
-                  <div className="bg-vygo-card-2 border border-vygo-border rounded-xl p-4 text-left space-y-2">
-                    <p className="text-xs text-vygo-secondary font-semibold uppercase tracking-widest mb-2">Benchmark del sistema</p>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-vygo-secondary">Sin VYGO (B1)</span>
-                      <span className="text-vygo-white font-semibold">$102/h</span>
+                  {lifetimeCount > 0 && (
+                    <div className="bg-vygo-card-2 border border-vygo-border rounded-xl p-4 text-center">
+                      <p className="text-sm text-vygo-white font-semibold">
+                        Llevas {formatCurrency(lifetimeTotal)} en {lifetimeCount} {lifetimeCount === 1 ? 'entrega' : 'entregas'} en total
+                      </p>
                     </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-vygo-secondary">VYGO regla (B2)</span>
-                      <span className="text-vygo-white font-semibold">$158/h</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-vygo-secondary">VYGO agente (PPO)</span>
-                      <span className="text-vygo-green font-bold">$169/h ↑</span>
-                    </div>
-                  </div>
+                  )}
                 </div>
               )}
 
               {/* Empty state for week/month */}
               {p !== 'today' && summary.total === 0 && (
                 <div className="bg-vygo-card border border-vygo-border rounded-2xl p-8 text-center mb-4">
-                  <p className="text-vygo-secondary text-sm">Datos históricos próximamente</p>
-                  <p className="text-vygo-secondary/50 text-xs mt-1">Se conectarán desde el backend</p>
+                  <p className="text-vygo-secondary text-sm">Sin entregas registradas en este periodo</p>
                 </div>
               )}
 
@@ -189,46 +130,47 @@ export function EarningsPage() {
                 />
               </div>
 
-              {/* VYGO value */}
-              <div className="bg-vygo-green/5 border border-vygo-green/20 rounded-2xl p-4 mb-4">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-2">
+              {/* VYGO value — solo aplica a "hoy": no hay historial diario de rechazos para semana/mes */}
+              {p === 'today' && (
+                <div className="bg-vygo-green/5 border border-vygo-green/20 rounded-2xl p-4 mb-4">
+                  <div className="flex items-center gap-2 mb-3">
                     <Star size={14} className="text-vygo-green" />
                     <p className="text-sm font-semibold text-vygo-white">Gracias a VYGO</p>
                   </div>
-                  {p === 'today' && vygoImpactPct > 0 && (
-                    <span className="text-xs font-bold text-vygo-green bg-vygo-green/10 px-2 py-0.5 rounded-full">
-                      +{vygoImpactPct}% vs sin VYGO
-                    </span>
+                  {summary.additionalEarningsFromVygo === 0 && summary.kmSaved === 0 && summary.minutesSaved === 0 ? (
+                    <p className="text-xs text-vygo-secondary/60 text-center py-1">
+                      Aún no rechazas ofertas hoy
+                    </p>
+                  ) : (
+                    <div className="grid grid-cols-3 gap-3 text-center">
+                      <div>
+                        <p className="text-xl font-bold text-vygo-green text-money">
+                          {formatCurrency(summary.additionalEarningsFromVygo)}
+                        </p>
+                        <p className="text-[10px] text-vygo-secondary mt-0.5 leading-tight">
+                          ganancia adicional estimada
+                        </p>
+                      </div>
+                      <div className="border-x border-vygo-border/50">
+                        <p className="text-xl font-bold text-vygo-white">
+                          {formatDistance(summary.kmSaved)}
+                        </p>
+                        <p className="text-[10px] text-vygo-secondary mt-0.5 leading-tight">
+                          km ahorrados
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xl font-bold text-vygo-white">
+                          {formatMinutes(summary.minutesSaved)}
+                        </p>
+                        <p className="text-[10px] text-vygo-secondary mt-0.5 leading-tight">
+                          tiempo ahorrado
+                        </p>
+                      </div>
+                    </div>
                   )}
                 </div>
-                <div className="grid grid-cols-3 gap-3 text-center">
-                  <div>
-                    <p className="text-xl font-bold text-vygo-green text-money">
-                      {formatCurrency(summary.additionalEarningsFromVygo)}
-                    </p>
-                    <p className="text-[10px] text-vygo-secondary mt-0.5 leading-tight">
-                      ganancia adicional estimada
-                    </p>
-                  </div>
-                  <div className="border-x border-vygo-border/50">
-                    <p className="text-xl font-bold text-vygo-white">
-                      {formatDistance(summary.kmSaved)}
-                    </p>
-                    <p className="text-[10px] text-vygo-secondary mt-0.5 leading-tight">
-                      km ahorrados
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-xl font-bold text-vygo-white">
-                      {formatMinutes(summary.minutesSaved)}
-                    </p>
-                    <p className="text-[10px] text-vygo-secondary mt-0.5 leading-tight">
-                      tiempo ahorrado
-                    </p>
-                  </div>
-                </div>
-              </div>
+              )}
 
               {/* Best hour */}
               <div className="bg-vygo-card border border-vygo-border rounded-2xl p-4 mb-4">
@@ -298,23 +240,6 @@ export function EarningsPage() {
       </div>
     </div>
   )
-}
-
-function buildPlatformBreakdown(orders: Order[]): PlatformEarning[] {
-  const map: Record<string, { earnings: number; km: number; count: number }> = {}
-  for (const o of orders) {
-    if (!map[o.platform]) map[o.platform] = { earnings: 0, km: 0, count: 0 }
-    map[o.platform].earnings += o.earnings
-    map[o.platform].km += o.distanceKm
-    map[o.platform].count += 1
-  }
-  return Object.entries(map).map(([platform, d]) => ({
-    platform,
-    totalEarnings: d.earnings,
-    totalOrders: d.count,
-    earningsPerKm: d.km > 0 ? d.earnings / d.km : 0,
-    avgPerOrder: d.count > 0 ? d.earnings / d.count : 0,
-  }))
 }
 
 function EarningMetric({ value, label, highlight = false }: { value: string; label: string; highlight?: boolean }) {

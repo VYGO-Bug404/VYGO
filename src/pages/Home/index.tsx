@@ -4,6 +4,7 @@ import { useDriverStore } from '@/stores/driver.store'
 import { useOrdersStore } from '@/stores/orders.store'
 import { useEndShift } from '@/hooks/useEndShift'
 import { useCountUp } from '@/hooks/useCountUp'
+import { useTodayMetrics } from '@/hooks/useTodayMetrics'
 import { usePlatformConnections } from '@/hooks/usePlatformConnections'
 import { useRouteStore } from '@/stores/route.store'
 import { EndShiftConfirm } from '@/components/EndShiftConfirm'
@@ -18,9 +19,7 @@ export function HomePage() {
   const driverStatus = useDriverStore((s) => s.status)
   const { connections: platformConnections } = usePlatformConnections()
   const routeGeoJSON = useRouteStore((s) => s.routeGeoJSON)
-  const todayEarnings = useDriverStore((s) => s.todayEarnings)
-  const earningsPerHour = useDriverStore((s) => s.earningsPerHour)
-  const completedOrders = useDriverStore((s) => s.completedOrders)
+  const { todayEarnings, earningsPerHour, completedOrders } = useTodayMetrics()
   const startShift = useDriverStore((s) => s.startShift)
   const activeOrders = useOrdersStore((s) => s.activeOrders)
   const { tryEndShift, confirming, confirmEnd, cancelConfirm } = useEndShift()

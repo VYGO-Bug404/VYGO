@@ -86,26 +86,30 @@ function mapRow(row: any): Order {
 let _offerPool: Order[] = []
 
 export const ordersService = {
-  getActiveOrders(): Order[] {
-    return []
-  },
-
-  getCompletedOrders(): Order[] {
-    return []
-  },
-
   async fetchCompletedOrders(): Promise<Order[]> {
     const { data, error } = await supabase
       .from('pedidos_vista')
       .select('*')
       .eq('estado', 'entregado')
-      .order('entregado_en', { ascending: false })
-      .limit(20)
+      // entregado_en llega NULL en los pedidos sembrados (bug de datos) — creado_en sí es confiable
+      .order('creado_en', { ascending: false })
+      .limit(200)
     if (error) {
       console.error('fetchCompletedOrders:', error)
       return []
     }
     return (data ?? []).map(mapRow)
+  },
+
+  // Best-effort: persiste la entrega en Supabase vía una RPC angosta (ver plan — requiere
+  // que la función marcar_entregado exista en la base). Si falla, el estado local sigue
+  // siendo la fuente de verdad para la sesión actual; solo se pierde la durabilidad
+  // entre dispositivos para ese pedido.
+  async markDelivered(id: string): Promise<void> {
+    const { error } = await supabase.rpc('marcar_entregado', { p_pedido_id: id })
+    if (error) {
+      console.warn('markDelivered: no se pudo persistir en Supabase —', error.message)
+    }
   },
 
   async loadOfferPool(): Promise<void> {

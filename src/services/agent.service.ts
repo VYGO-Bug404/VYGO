@@ -2,6 +2,8 @@ import type { RespuestaDecidir, Politica } from '@/lib/vygoAgent'
 import type { Order } from '@/types/order'
 import { useDriverStore } from '@/stores/driver.store'
 import { useAuthStore } from '@/stores/auth.store'
+import { useOrdersStore } from '@/stores/orders.store'
+import { buildEarningsSummary, getTodayRange } from '@/lib/earningsAggregation'
 
 const AGENT_URL = import.meta.env.VITE_AGENT_URL
 const TIMEOUT_MS = 12000
@@ -184,7 +186,7 @@ export async function decidir(
           capacidad: 3,
           minutos_turno_transcurridos: minutosTranscurridos,
           minutos_turno_restantes: minutosRestantes,
-          ganancia_turno_mxn: driverStore.todayEarnings,
+          ganancia_turno_mxn: buildEarningsSummary(useOrdersStore.getState().completedOrders, getTodayRange()).total,
           km_recorridos: 0,
           rho_actual_mxn_h: effectiveRho,
         },

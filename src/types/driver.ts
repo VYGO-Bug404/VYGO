@@ -11,6 +11,7 @@ export interface Vehicle {
   type: 'moto' | 'car' | 'bicycle'
   brand: string
   model: string
+  year?: string
 }
 
 export interface Driver {
@@ -27,8 +28,5 @@ export interface Driver {
 export interface DriverState {
   driver: Driver
   status: DriverStatus
-  todayEarnings: number
-  earningsPerHour: number
-  completedOrders: number
   shiftStartedAt: Date | null
 }

@@ -3,6 +3,7 @@ import { X, MapPin, Navigation, Zap, CheckCircle2 } from 'lucide-react'
 import { useOrdersStore } from '@/stores/orders.store'
 import { useRouteStore } from '@/stores/route.store'
 import { useDriverStore } from '@/stores/driver.store'
+import { useTodayMetrics } from '@/hooks/useTodayMetrics'
 import { PlatformBadge } from '@/components/PlatformBadge'
 import { Button } from '@/components/ui/button'
 import { formatCurrency, formatDistance, formatMinutes } from '@/lib/utils'
@@ -31,7 +32,7 @@ export function NewOrderSheet({ order }: NewOrderSheetProps) {
   const acceptOffer = useOrdersStore((s) => s.acceptOffer)
   const rejectOffer = useOrdersStore((s) => s.rejectOffer)
   const activeOrders = useOrdersStore((s) => s.activeOrders)
-  const rhoActual = useDriverStore((s) => s.earningsPerHour)   // unified ρ source
+  const { earningsPerHour: rhoActual } = useTodayMetrics()   // unified ρ source
   const setRouteGeoJSON = useRouteStore((s) => s.setRouteGeoJSON)
 
   // #1 — Countdown timer

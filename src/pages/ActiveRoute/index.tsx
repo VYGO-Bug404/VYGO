@@ -6,6 +6,7 @@ import { useDriverStore } from '@/stores/driver.store'
 
 import { useActiveRoute } from '@/hooks/useActiveRoute'
 import { useEndShift } from '@/hooks/useEndShift'
+import { useTodayMetrics } from '@/hooks/useTodayMetrics'
 import { EndShiftConfirm } from '@/components/EndShiftConfirm'
 import { MockMap } from '@/components/maps/MockMap'
 import { PlatformBadge } from '@/components/PlatformBadge'
@@ -29,10 +30,8 @@ export function ActiveRoutePage() {
   const currentStopIndex = useRouteStore((s) => s.currentStopIndex)
 
   const { tryEndShift, confirming, confirmEnd, cancelConfirm } = useEndShift()
-  const todayEarnings = useDriverStore((s) => s.todayEarnings)
-  const earningsPerHour = useDriverStore((s) => s.earningsPerHour)
+  const { todayEarnings, earningsPerHour, completedOrders: completedOrdersCount } = useTodayMetrics()
   const shiftStartedAt = useDriverStore((s) => s.shiftStartedAt)
-  const completedOrdersCount = useDriverStore((s) => s.completedOrders)
 
   const primaryOrder = currentStop?.order ?? activeOrders[0] ?? null
   const nextOrder = nextStop?.order ?? activeOrders[1] ?? null
