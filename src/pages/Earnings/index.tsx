@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { TrendingUp, Clock, Navigation2, Star } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { EarningsChart } from '@/components/earnings/EarningsChart'
@@ -23,10 +23,21 @@ export function EarningsPage() {
   const vygoKmSaved = useDriverStore((s) => s.vygoKmSaved)
   const vygoMinutesSaved = useDriverStore((s) => s.vygoMinutesSaved)
   const completedOrdersList = useOrdersStore((s) => s.completedOrders)
+  const loadCompletedOrders = useOrdersStore((s) => s.loadCompletedOrders)
 
-  // ── Cálculos reales para "Hoy" desde los pedidos completados ────────────────
+  useEffect(() => {
+    loadCompletedOrders()
+  }, [])
+
+  const dbTotalEarnings = completedOrdersList.reduce((s, o) => s + Number(o.earnings ?? o.ganancia ?? 0), 0)
+  const effectiveTodayEarnings = todayEarnings > 0 ? todayEarnings : dbTotalEarnings
+  const effectiveCompletedOrders = completedOrders > 0 ? completedOrders : completedOrdersList.length
+  const effectivePerHour = earningsPerHour > 0
+    ? earningsPerHour
+    : (effectiveCompletedOrders > 0 ? Math.round(dbTotalEarnings / Math.max((effectiveCompletedOrders * 25) / 60, 0.5)) : 0)
+
   const totalKm = completedOrdersList.reduce((s, o) => s + o.distanceKm, 0)
-  const perKm = totalKm > 0 ? todayEarnings / totalKm : 0
+  const perKm = totalKm > 0 ? effectiveTodayEarnings / totalKm : 0
 
   // Agrupar ganancias por hora usando deliveredAt
   const hourMap: Record<number, { earnings: number; orders: number }> = {}
@@ -34,7 +45,7 @@ export function EarningsPage() {
     const timestamp = o.deliveredAt ?? o.createdAt
     const h = timestamp.getHours()
     if (!hourMap[h]) hourMap[h] = { earnings: 0, orders: 0 }
-    hourMap[h].earnings += o.earnings
+    hourMap[h].earnings += Number(o.earnings ?? o.ganancia ?? 0)
     hourMap[h].orders += 1
   }
   const hourly = Object.entries(hourMap)
@@ -53,16 +64,16 @@ export function EarningsPage() {
   const B1_RATE = 102
   const horasWorked = shiftStartedAt
     ? Math.max((Date.now() - shiftStartedAt.getTime()) / 3_600_000, 0.01)
-    : (completedOrders > 0 ? completedOrders * 0.3 : 0)
+    : (effectiveCompletedOrders > 0 ? effectiveCompletedOrders * 0.3 : 0)
   const b1Estimated = Math.round(B1_RATE * horasWorked)
-  const b1Gain = Math.max(0, todayEarnings - b1Estimated)
+  const b1Gain = Math.max(0, effectiveTodayEarnings - b1Estimated)
 
   // Usar ganancia real de VYGO (rechazos correctos) si supera estimado B1
   const additionalEarnings = Math.max(vygoGainMxn, b1Gain)
-  const kmSaved = vygoKmSaved > 0 ? vygoKmSaved : Math.round(completedOrders * 2.1)
-  const minutesSaved = vygoMinutesSaved > 0 ? vygoMinutesSaved : Math.round(completedOrders * 8)
+  const kmSaved = vygoKmSaved > 0 ? vygoKmSaved : Math.round(effectiveCompletedOrders * 2.1)
+  const minutesSaved = vygoMinutesSaved > 0 ? vygoMinutesSaved : Math.round(effectiveCompletedOrders * 8)
   const pctMejora = b1Estimated > 0
-    ? Math.round(((todayEarnings - b1Estimated) / b1Estimated) * 100)
+    ? Math.round(((effectiveTodayEarnings - b1Estimated) / b1Estimated) * 100)
     : 0
 
   const mockSummary = earningsService.getSummary(period)
@@ -70,11 +81,11 @@ export function EarningsPage() {
   const summary = period === 'today'
     ? {
         ...mockSummary,
-        total: todayEarnings,
-        perHour: earningsPerHour,
+        total: effectiveTodayEarnings,
+        perHour: effectivePerHour,
         perKm: Math.round(perKm * 10) / 10,
         totalKm: Math.round(totalKm * 10) / 10,
-        totalOrders: completedOrders,
+        totalOrders: effectiveCompletedOrders,
         hourly,
         bestHourRange,
         bestHourEarnings: bestHour.earnings,
@@ -106,7 +117,7 @@ export function EarningsPage() {
             <TabsContent key={p} value={p}>
 
               {/* Empty state — today sin datos */}
-              {p === 'today' && todayEarnings === 0 && completedOrders === 0 && (
+              {p === 'today' && effectiveTodayEarnings === 0 && effectiveCompletedOrders === 0 && (
                 <div className="bg-vygo-card border border-vygo-border rounded-2xl p-8 text-center">
                   <div className="w-14 h-14 rounded-full bg-vygo-green/10 border border-vygo-green/20 flex items-center justify-center mx-auto mb-4">
                     <TrendingUp size={24} className="text-vygo-green" />
@@ -142,7 +153,7 @@ export function EarningsPage() {
               )}
 
               {/* Contenido con datos — oculto si today sin actividad */}
-              {(p !== 'today' || todayEarnings > 0 || completedOrders > 0) && <>
+              {(p !== 'today' || effectiveTodayEarnings > 0 || effectiveCompletedOrders > 0) && <>
 
               {/* Hero earnings */}
               <div className="bg-vygo-card border border-vygo-border rounded-2xl p-5 mb-4">
@@ -304,7 +315,7 @@ function buildPlatformBreakdown(orders: Order[]): PlatformEarning[] {
   const map: Record<string, { earnings: number; km: number; count: number }> = {}
   for (const o of orders) {
     if (!map[o.platform]) map[o.platform] = { earnings: 0, km: 0, count: 0 }
-    map[o.platform].earnings += o.earnings
+    map[o.platform].earnings += Number(o.earnings ?? o.ganancia ?? 0)
     map[o.platform].km += o.distanceKm
     map[o.platform].count += 1
   }

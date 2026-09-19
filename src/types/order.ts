@@ -37,6 +37,8 @@ export interface Order {
   projectedEarningsPerHour?: number
   earningsPerKm?: number
   recommendation?: Recommendation
+  ganancia?: number
+  repartidor_id?: string
   status: OrderStatus
   createdAt: Date
   acceptedAt?: Date
