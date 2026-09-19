@@ -4,6 +4,7 @@ import { ordersService } from '@/services/orders.service'
 import { loadConfig, getConfig } from '@/services/config.service'
 import { useDriverStore } from '@/stores/driver.store'
 import { useRouteStore } from '@/stores/route.store'
+import { useAuthStore } from '@/stores/auth.store'
 
 interface OrdersStore {
   activeOrders: Order[]
@@ -12,6 +13,7 @@ interface OrdersStore {
   _nextRouteNumber: number
 
   loadInitialData: () => Promise<void>
+  loadCompletedOrders: () => Promise<void>
   acceptOffer: (order: Order, agentPlan?: any) => void
   resetShift: () => void
   rejectOffer: () => void
@@ -32,9 +34,12 @@ export const useOrdersStore = create<OrdersStore>((set, get) => ({
       ordersService.loadOfferPool(),
       loadConfig(),
     ])
-    // No pre-cargamos pedidos de Supabase como métricas del usuario:
-    // los pedidos 'entregado' en la BD son datos de demostración, no del usuario actual.
-    // El driver store arranca en 0 y se alimenta solo de entregas reales de la sesión.
+  },
+
+  loadCompletedOrders: async () => {
+    const userId = useAuthStore.getState().userId
+    const orders = await ordersService.fetchCompletedOrders(userId ?? undefined)
+    set({ completedOrders: orders })
   },
 
   setPendingOffer: (order) => set({ pendingOffer: order }),

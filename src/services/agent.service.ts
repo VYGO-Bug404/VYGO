@@ -68,9 +68,11 @@ function b2Fallback(offer: Order, rhoActual: number, posicion?: { lat: number; l
   const d2 = haversineM(offer.pickup.lat, offer.pickup.lng, offer.dropoff.lat, offer.dropoff.lng) * 1.35
   const deltaDistancia = Number((d1 + d2).toFixed(1))
   const deltaTiempo = Math.max(5, Math.round((deltaDistancia / 28) * 60 + 5))
-  const tarifa = offer.earnings
+  const tarifa = offer.ganancia ?? offer.earnings
   const costoMarginal = Number((deltaDistancia * 2.5 + deltaTiempo * 0.5).toFixed(2))
-  const gananciaNeta = Number((tarifa - costoMarginal).toFixed(2))
+  const gananciaNeta = offer.ganancia !== undefined
+    ? offer.ganancia
+    : Number((tarifa - costoMarginal).toFixed(2))
   let tasaMarginal = deltaTiempo > 0 ? (gananciaNeta / (deltaTiempo / 60)) : 0
   tasaMarginal = Math.min(Math.max(tasaMarginal, 0), 450)
   const umbralSuperado = tasaMarginal > rhoActual
