@@ -61,7 +61,8 @@ function mapRow(row: any): Order {
   const distanceKm = parseFloat(
     haversineKm(row.origen_lat, row.origen_lng, row.destino_lat, row.destino_lng).toFixed(1)
   )
-  const earnings = parseFloat(row.precio)
+  const gananciaDb = row.ganancia !== null && row.ganancia !== undefined ? Number(row.ganancia) : undefined
+  const earnings = gananciaDb ?? Number(row.precio)
   const earningsPerKm = parseFloat((earnings / Math.max(distanceKm, 0.1)).toFixed(2))
   const estimatedMinutes = Math.round(distanceKm * 3.5 + 2)
   const zona: string = row.contexto?.zona ?? ''
@@ -73,6 +74,8 @@ function mapRow(row: any): Order {
     platform: (row.plataforma as Platform) ?? 'uber',
     restaurantName: row.contexto?.comercio_nombre ?? row.origen_direccion,
     earnings,
+    ganancia: gananciaDb,
+    repartidor_id: row.repartidor_id ?? undefined,
     pickup: {
       name: row.contexto?.comercio_nombre,
       address: row.origen_direccion,
@@ -121,13 +124,26 @@ export const ordersService = {
     return []
   },
 
-  async fetchCompletedOrders(): Promise<Order[]> {
-    const { data, error } = await supabase
+  async fetchCompletedOrders(usuarioId?: string): Promise<Order[]> {
+    let repartidorId: string | null = null
+    if (usuarioId) {
+      const { data: rep } = await supabase
+        .from('repartidores')
+        .select('id')
+        .eq('usuario_id', usuarioId)
+        .limit(1)
+      repartidorId = rep?.[0]?.id ?? null
+    }
+    let query = supabase
       .from('pedidos_vista')
       .select('*')
       .eq('estado', 'entregado')
       .order('creado_en', { ascending: false })
       .limit(30)
+    if (repartidorId) {
+      query = query.eq('repartidor_id', repartidorId)
+    }
+    const { data, error } = await query
     if (error) {
       console.error('fetchCompletedOrders:', error)
       return []

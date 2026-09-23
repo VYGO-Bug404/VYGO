@@ -80,8 +80,8 @@ export const useDriverStore = create<DriverStore>((set, get) => ({
 
   syncTelemetria: (telemetria: { rho_actual_mxn_h: number; ganancia_turno_mxn: number; pedidos_entregados: number }) =>
     set((state) => ({
-      todayEarnings: telemetria.ganancia_turno_mxn,
-      earningsPerHour: telemetria.rho_actual_mxn_h,
+      todayEarnings: telemetria.pedidos_entregados > 0 ? telemetria.ganancia_turno_mxn : state.todayEarnings,
+      earningsPerHour: telemetria.pedidos_entregados > 0 ? telemetria.rho_actual_mxn_h : state.earningsPerHour,
       completedOrders: telemetria.pedidos_entregados,
     })),
 
