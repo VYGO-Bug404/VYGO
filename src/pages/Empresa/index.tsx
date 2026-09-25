@@ -159,12 +159,53 @@ function TabPrioridades() {
 
   return (
     <div className="space-y-3">
-      <InfoBox type="warning">
-        Antes de hablar de porcentajes con un inversionista, deben demostrar que el mecanismo de datos funciona y que VYGO mejora la ganancia neta real del repartidor. Éstos son los dos riesgos que pueden tumbar el negocio aunque la empresa esté perfectamente constituida.
-      </InfoBox>
+      {/* ── Deal activo ───────────────────────────────────────────────── */}
+      <div className="bg-vygo-green/5 border border-vygo-green/30 rounded-2xl p-4 space-y-3">
+        <div className="flex items-center gap-2">
+          <DollarSign size={16} className="text-vygo-green flex-shrink-0" />
+          <p className="text-sm font-bold text-vygo-white">Oferta de inversión activa — análisis</p>
+        </div>
 
-      <InfoBox type="info">
-        Uno de los fundadores alcanza la mayoría de edad en noviembre 2025. El abogado debe estructurar su participación accionaria con las formalidades correspondientes a su situación actual. Se recomienda postergar la firma de cualquier cesión de código o convenio de inversión hasta contar con revisión legal, o bien hasta que dicha mayoría de edad esté consolidada.
+        <div className="grid grid-cols-3 gap-2">
+          <div className="bg-white/60 rounded-xl p-2.5 text-center">
+            <p className="text-[11px] text-vygo-secondary">Inversión</p>
+            <p className="text-base font-bold text-vygo-white">$400k</p>
+            <p className="text-[10px] text-vygo-secondary">MXN</p>
+          </div>
+          <div className="bg-white/60 rounded-xl p-2.5 text-center">
+            <p className="text-[11px] text-vygo-secondary">Equity ofrecido</p>
+            <p className="text-base font-bold text-vygo-white">20%</p>
+            <p className="text-[10px] text-vygo-secondary">propuesto</p>
+          </div>
+          <div className="bg-white/60 rounded-xl p-2.5 text-center">
+            <p className="text-[11px] text-vygo-secondary">Val. post-money</p>
+            <p className="text-base font-bold text-vygo-white">$2M</p>
+            <p className="text-[10px] text-vygo-secondary">MXN (~$114k USD)</p>
+          </div>
+        </div>
+
+        <div className="space-y-1.5 text-xs">
+          <div className="flex justify-between py-1 border-b border-vygo-border">
+            <span className="text-vygo-secondary">Valuación pre-money implícita</span>
+            <span className="font-semibold text-vygo-white">$1,600,000 MXN</span>
+          </div>
+          <div className="flex justify-between py-1 border-b border-vygo-border">
+            <span className="text-vygo-secondary">Equity que retienen los fundadores</span>
+            <span className="font-semibold text-vygo-white">80% (16% c/u si son 5 iguales)</span>
+          </div>
+          <div className="flex justify-between py-1">
+            <span className="text-vygo-secondary">Rango estándar pre-seed México</span>
+            <span className="font-semibold text-amber-700">5% – 15%</span>
+          </div>
+        </div>
+
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-800 leading-relaxed">
+          <strong>20% es negociable.</strong> El estándar para una ronda angel pre-revenue en México es 5–15%. Ceder 20% ahora deja poco margen para futuras rondas sin perder control. Dos opciones a negociar: reducir a 15% por el mismo monto ($400k = 15% implica valuación post-money de ~$2.67M MXN), o mantener el 20% y solicitar un monto mayor (~$600k MXN).
+        </div>
+      </div>
+
+      <InfoBox type="warning">
+        Antes de cerrar el deal, deben demostrar que el mecanismo de lectura de datos funciona en producción y que VYGO mejora la ganancia neta real del repartidor. Esos son los dos riesgos que pueden tumbar la valuación aunque los términos estén bien redactados.
       </InfoBox>
 
       {items.map((item) => (
@@ -277,17 +318,44 @@ function TabLegal() {
         </ul>
       </Accordion>
 
-      <Accordion title="Acuerdo con inversionistas" icon={<DollarSign size={16} className="text-vygo-secondary" />} badge="No firmar sin revisar" badgeColor="bg-red-100 text-red-700">
-        <p className="mb-2">Pedir primero una hoja de términos (term sheet). Revisar:</p>
-        <ul className="space-y-1.5 list-disc list-inside">
-          <li>Monto y si el dinero entra a la empresa o compra acciones de un fundador</li>
-          <li>Porcentaje y valuación usada</li>
-          <li>Derechos de voto y veto del inversionista</li>
-          <li>Diluciones en futuras rondas</li>
-          <li>Obligación de invertir más (follow-on)</li>
-          <li>Preferencias de liquidación al vender la empresa</li>
-          <li>Qué pasa si no cumplen metas o milestones</li>
+      <Accordion title="Acuerdo con inversionistas — $400k MXN / 20%" icon={<DollarSign size={16} className="text-vygo-secondary" />} badge="No firmar sin revisar" badgeColor="bg-red-100 text-red-700">
+        <p className="mb-3">Solicitar primero una hoja de términos (term sheet) por escrito antes de cualquier negociación verbal. Verificar punto por punto:</p>
+
+        <p className="text-[11px] font-semibold text-vygo-white uppercase tracking-wide mb-2">Estructura básica del deal</p>
+        <ul className="space-y-1.5 list-disc list-inside mb-3">
+          <li>Confirmar que los $400k MXN entran a la tesorería de <strong className="text-vygo-white">la empresa</strong>, no a cuentas personales de fundadores</li>
+          <li>Negociar equity a 15% — misma inversión implica valuación post-money de $2.67M MXN, más favorable para futuras rondas</li>
+          <li>Solicitar desembolso por tramos ligados a milestones (ej. 50% al firmar, 50% al alcanzar X usuarios activos)</li>
         </ul>
+
+        <p className="text-[11px] font-semibold text-vygo-white uppercase tracking-wide mb-2">Derechos del inversionista — qué es aceptable</p>
+        <ul className="space-y-1.5 list-disc list-inside mb-3">
+          <li>Preferencia de liquidación 1× no participante (estándar justo)</li>
+          <li>Derecho de primera oferta en futuras rondas (pro-rata)</li>
+          <li>Derechos de información: estados financieros trimestrales</li>
+          <li>Seat de observador en consejo — no seat con voto</li>
+        </ul>
+
+        <p className="text-[11px] font-semibold text-vygo-white uppercase tracking-wide mb-2">Cláusulas a rechazar o acotar</p>
+        <ul className="space-y-1.5 list-disc list-inside mb-3">
+          <li>Anti-dilución ratchet completo — solo aceptar promedio ponderado base amplia</li>
+          <li>Veto sobre decisiones operativas (contrataciones, gastos, estrategia de producto)</li>
+          <li>Drag-along sin umbral mínimo de aprobación de fundadores</li>
+          <li>Cláusula de exclusividad con el inversionista por más de 30 días</li>
+        </ul>
+
+        <p className="text-[11px] font-semibold text-vygo-white uppercase tracking-wide mb-2">Proyección de dilución</p>
+        <div className="bg-vygo-card-2 rounded-xl p-3 font-mono text-[11px] text-vygo-white space-y-1">
+          <p>Hoy (pre-inversión):     fundadores 100%</p>
+          <p>Post $400k / 20%:        fundadores 80%  · inv. 20%</p>
+          <p>Ronda A hipotética 25%:  fundadores 60%  · inv.A 25% · inv. 20%→15%</p>
+          <p>Ronda B hipotética 20%:  fundadores 48%  · ...</p>
+        </div>
+        <p className="text-[11px] text-vygo-secondary mt-2">Con 20% cedido en la primera ronda, los fundadores quedan por debajo del 50% colectivo antes de completar una Ronda B. Con 15% inicial mantienen margen significativo más tiempo.</p>
+
+        <InfoBox type="warning">
+          No firmar ningún documento vinculante antes de que el abogado corporativo revise los términos completos, no solo el resumen.
+        </InfoBox>
       </Accordion>
     </div>
   )
