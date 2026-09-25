@@ -1,0 +1,46 @@
+{
+  "username": "VYGO",
+  "embeds": [
+    {
+      "title": "🚦  6 Prioridades antes de recibir inversión",
+      "description": "Orden estricto. No avanzar al siguiente paso sin completar el anterior.",
+      "color": 16744272,
+      "fields": [
+        {
+          "name": "1 · 🔴  AHORA — Inventario de propiedad intelectual",
+          "value": "Listar a todos los que aportaron código, diseño, modelo de datos o nombre durante y después de HackMTY. Revisar reglas de propiedad intelectual del evento. Definir qué puede aportar cada quien a la sociedad.",
+          "inline": false
+        },
+        {
+          "name": "2 · 🔴  AHORA — Acuerdo entre fundadores",
+          "value": "Porcentajes, vesting (adquisición gradual), funciones, qué pasa si alguien se va, cesión de PI a la empresa, confidencialidad y resolución de bloqueos. **No repartir 20% por inercia — la participación debe reflejar aportación y permanencia.**",
+          "inline": false
+        },
+        {
+          "name": "3 · 🟠  ESTA SEMANA — Probar datos en producción",
+          "value": "Demostrar que el mecanismo de lectura de notificaciones funciona en 3+ modelos de teléfono reales. Documentar qué pasa cuando Rappi, Uber o DiDi cambian el formato. Sin esto no hay producto.",
+          "inline": false
+        },
+        {
+          "name": "4 · 🟠  ESTA SEMANA — Entrevistas y piloto",
+          "value": "25–30 entrevistas con repartidores en Monterrey. Medir ganancia neta por hora antes y después de usar VYGO. Ver canal **#mercado** para las preguntas.",
+          "inline": false
+        },
+        {
+          "name": "5 · 🔵  ANTES DE LA INVERSIÓN — Constituir la empresa",
+          "value": "Solo después de resolver PI y acuerdo de fundadores. Opciones: S.A.P.I. de C.V. (recomendada para inversión) o S.A. de C.V. Cotizar ambas con abogado antes de decidir.",
+          "inline": false
+        },
+        {
+          "name": "6 · 🟣  ANTES DE FIRMAR — Negociar el deal por escrito",
+          "value": "Pedir hoja de términos (term sheet). Revisar monto, valuación, derechos de voto, diluciones y qué pasa si no se cumplen metas. **Ningún fundador firma sin revisión del abogado.**",
+          "inline": false
+        }
+      ],
+      "footer": {
+        "text": "VYGO · Prioridades del equipo fundador · sept 2026"
+      },
+      "timestamp": "2026-09-24T00:00:00Z"
+    }
+  ]
+}

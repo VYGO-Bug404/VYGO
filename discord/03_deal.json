@@ -1,0 +1,51 @@
+{
+  "username": "VYGO",
+  "embeds": [
+    {
+      "title": "💰  Oferta de inversión activa — Análisis",
+      "description": "Un inversionista propone **$400,000 MXN por el 20%** de la empresa. A continuación el análisis completo del deal.",
+      "color": 16711680,
+      "fields": [
+        {
+          "name": "📊  Valuación implícita",
+          "value": "```\nInversión propuesta   $400,000 MXN\nEquity ofrecido            20%\nVal. post-money        $2,000,000 MXN  (~$114k USD)\nVal. pre-money         $1,600,000 MXN  (~$91k USD)\nEquity fundadores            80%  (16% c/u si son 5 iguales)\n```",
+          "inline": false
+        },
+        {
+          "name": "⚠️  Por qué 20% es negociable",
+          "value": "El rango estándar para una ronda angel pre-revenue en México es **5–15%**. Ceder 20% ahora deja poco margen para rondas futuras sin perder el control mayoritario.",
+          "inline": false
+        },
+        {
+          "name": "✅  Opción A — Reducir el equity",
+          "value": "$400k MXN por **15%** → valuación post-money de $2,670,000 MXN. Mismo dinero, más espacio para crecer.",
+          "inline": true
+        },
+        {
+          "name": "✅  Opción B — Aumentar la inversión",
+          "value": "Mantener el 20% pero solicitar **~$600k MXN**. Más capital, misma dilución.",
+          "inline": true
+        },
+        {
+          "name": "📉  Proyección de dilución",
+          "value": "```\nHoy              Fundadores 100%\nPost $400k/20%   Fundadores  80%  │ Ángel  20%\nRonda A (25%)    Fundadores  60%  │ A  25% │ Ángel ~15%\nRonda B (20%)    Fundadores  48%  │ ...\n```\nCon 15% inicial los fundadores permanecen sobre 50% colectivo al menos una ronda más.",
+          "inline": false
+        },
+        {
+          "name": "✅  Cláusulas aceptables",
+          "value": "· Preferencia de liquidación 1× no participante\n· Pro-rata en futuras rondas\n· Derechos de información (estados financieros trimestrales)\n· Seat de **observador** en consejo (sin voto)",
+          "inline": false
+        },
+        {
+          "name": "❌  Cláusulas a rechazar",
+          "value": "· Anti-dilución ratchet completo\n· Veto sobre decisiones operativas\n· Drag-along sin umbral mínimo de fundadores\n· Exclusividad con el inversionista > 30 días",
+          "inline": false
+        }
+      ],
+      "footer": {
+        "text": "Ningún documento vinculante se firma sin revisión del abogado corporativo."
+      },
+      "timestamp": "2026-09-24T00:00:00Z"
+    }
+  ]
+}

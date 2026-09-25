@@ -1,0 +1,46 @@
+{
+  "username": "VYGO",
+  "embeds": [
+    {
+      "title": "🎙️  Estudio de mercado — Guía de entrevistas",
+      "description": "**Meta:** 25–30 entrevistas con repartidores de Monterrey.\nMezclar: una sola app y varias; moto, auto y bicicleta; distintos turnos y zonas.\n\n> ⚠️ No mostrar VYGO hasta haber entendido el problema actual del repartidor. Una respuesta \"sí la usaría\" vale poco — importan los episodios concretos.",
+      "color": 5793266,
+      "fields": [
+        {
+          "name": "🗂️  Bloque 1 — Contexto y última jornada",
+          "value": "**1.** ¿Con qué plataformas trabajaste la semana pasada y cuántas horas estuviste conectado?\n**2.** Cuéntame tu último turno, desde que empezaste hasta que terminaste.",
+          "inline": false
+        },
+        {
+          "name": "🗂️  Bloque 2 — Decisiones y datos",
+          "value": "**3.** En tu última oferta que rechazaste, ¿qué viste y por qué la rechazaste?\n**4.** ¿Cuándo aceptaste un pedido que resultó malo? ¿Qué dato te faltó?\n**5.** ¿Cómo calculas si te conviene un pedido? Muéstrame tu método.",
+          "inline": false
+        },
+        {
+          "name": "🗂️  Bloque 3 — Costos y tiempos reales",
+          "value": "**6.** ¿Cuánto gastaste en gasolina, comisiones y mantenimiento la semana pasada?\n**7.** ¿Cuánto tiempo esperas en restaurantes y cómo afecta tus decisiones?\n**8.** ¿Qué haces cuando llegan ofertas de dos apps al mismo tiempo?",
+          "inline": false
+        },
+        {
+          "name": "🗂️  Bloque 4 — Herramientas actuales",
+          "value": "**9.** ¿Usas alguna app o hoja de cálculo para registrar ganancias? ¿Qué te cuesta?\n**10.** ¿En qué momento consultarías otra pantalla y en cuál sería peligroso?",
+          "inline": false
+        },
+        {
+          "name": "🗂️  Bloque 5 — Privacidad y disposición a pagar",
+          "value": "**11.** ¿Qué información aceptarías compartir para recibir recomendaciones?\n**12.** ¿Qué tendría que pasar para que dijeras \"esto me ayudó\"?\n**13.** ¿Has pagado por alguna herramienta de trabajo? ¿Cuánto?\n**14.** *(Mostrar VYGO)* ¿Interpretas esta recomendación en 5 segundos? ¿Qué pagarías?",
+          "inline": false
+        },
+        {
+          "name": "📏  Métricas del piloto — definir antes de iniciar",
+          "value": "· Ganancia neta/hora (después de gasolina, comisiones y esperas)\n· % de recomendaciones que el repartidor siguió\n· Retención semanal (semana 2 y 3)\n· Errores de lectura de notificaciones\n· Tiempo promedio de espera en restaurantes",
+          "inline": false
+        }
+      ],
+      "footer": {
+        "text": "VYGO · Estudio de mercado · sept 2026"
+      },
+      "timestamp": "2026-09-24T00:00:00Z"
+    }
+  ]
+}

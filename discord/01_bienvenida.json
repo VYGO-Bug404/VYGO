@@ -1,0 +1,26 @@
+{
+  "username": "VYGO",
+  "embeds": [
+    {
+      "title": "📋  Plan de Empresa — VYGO",
+      "description": "Este canal centraliza todo lo que el equipo necesita saber antes de recibir inversión: estructura legal, análisis del deal, estudio de mercado y presupuesto operativo.\n\n> Todos los miembros del equipo deben leer los mensajes fijados antes de cualquier reunión con el inversionista.",
+      "color": 7317504,
+      "fields": [
+        {
+          "name": "📌  Secciones",
+          "value": "**#01 — Prioridades** · qué hacer y en qué orden\n**#02 — Deal activo** · análisis de la oferta de inversión\n**#03 — Legal & Fiscal** · constitución, impuestos, marca\n**#04 — Mercado** · entrevistas + métricas del piloto\n**#05 — Tareas** · asignaciones por integrante",
+          "inline": false
+        },
+        {
+          "name": "🔗  App interna",
+          "value": "La página `/empresa` dentro de la app VYGO contiene todo este material en formato interactivo.",
+          "inline": false
+        }
+      ],
+      "footer": {
+        "text": "VYGO · Documento interno del equipo fundador"
+      },
+      "timestamp": "2026-09-24T00:00:00Z"
+    }
+  ]
+}

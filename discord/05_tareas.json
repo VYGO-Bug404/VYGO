@@ -1,0 +1,74 @@
+{
+  "username": "VYGO",
+  "content": "@everyone  Tareas del equipo fundador ordenadas por prioridad. Cada integrante tiene asignaciones específicas. Reaccionen con ✅ cuando completen la suya.",
+  "embeds": [
+    {
+      "title": "📌  PRIORIDAD 1 — Esta semana (bloqueante)",
+      "description": "Estas tareas bloquean todo lo demás. No se puede constituir ni negociar sin completarlas.",
+      "color": 16711680,
+      "fields": [
+        {
+          "name": "🔴  Inventario de PI — Todo el equipo",
+          "value": "Cada integrante lista por escrito:\n· Qué código, diseño o modelo aportó antes y después de HackMTY\n· Si tiene algún acuerdo verbal previo sobre propiedad\n· Si firmó algo con Infosys o el evento\n\n**Entregable:** documento compartido con la lista de cada quien\n**Deadline:** 27 sept 2026",
+          "inline": false
+        },
+        {
+          "name": "🔴  Prueba de datos en producción — Dev lead",
+          "value": "Demostrar que el notification listener funciona en 3 modelos de teléfono distintos (no emulador). Documentar qué pasa cuando Rappi o Uber cambian el formato.\n\n**Entregable:** video de pantalla + nota técnica en el repo\n**Deadline:** 27 sept 2026",
+          "inline": false
+        }
+      ],
+      "footer": {
+        "text": "Sin estos dos puntos no hay producto ni empresa que valga."
+      }
+    },
+    {
+      "title": "📌  PRIORIDAD 2 — Semana del 28 sept",
+      "description": "En paralelo una vez resueltas las tareas bloqueantes.",
+      "color": 16744272,
+      "fields": [
+        {
+          "name": "🟠  Acuerdo de fundadores — 1 responsable + abogado",
+          "value": "Buscar abogado corporativo (cotizar mínimo 2). Llevar el inventario de PI ya completado. Definir:\n· Porcentajes por aportación real, no por inercia\n· Vesting de 4 años con cliff de 1 año\n· Qué pasa si alguien deja de trabajar\n\n**Entregable:** borrador del acuerdo para revisión del equipo\n**Deadline:** 5 oct 2026",
+          "inline": false
+        },
+        {
+          "name": "🟠  Primeras 10 entrevistas — 2 integrantes",
+          "value": "Reclutar repartidores fuera del círculo de conocidos (no amigos ni familiares). Usar el guion del canal **#mercado**. Grabar audio con permiso o tomar notas detalladas.\n\n**Entregable:** resumen de 10 entrevistas con patrones comunes\n**Deadline:** 5 oct 2026",
+          "inline": false
+        },
+        {
+          "name": "🟠  Búsqueda de marca VYGO en IMPI — 1 responsable",
+          "value": "Ingresar al portal del IMPI y buscar \"VYGO\" y variantes antes de invertir en publicidad o materiales.\n\n**Entregable:** captura del resultado de la búsqueda\n**Deadline:** 28 sept 2026",
+          "inline": false
+        }
+      ]
+    },
+    {
+      "title": "📌  PRIORIDAD 3 — Octubre 2026",
+      "description": "Solo después de completar prioridades 1 y 2.",
+      "color": 5793266,
+      "fields": [
+        {
+          "name": "🔵  Constitución de la empresa — Responsable legal + abogado",
+          "value": "Con el acuerdo de fundadores firmado y la PI resuelta, iniciar el proceso de constitución. Pedir cotización para S.A.P.I. de C.V. y S.A. de C.V. y comparar.\n\n**Deadline:** oct 2026",
+          "inline": false
+        },
+        {
+          "name": "🔵  Completar las 30 entrevistas y arrancar piloto — 2–3 integrantes",
+          "value": "Llegar a 25–30 entrevistas y seleccionar 5–10 repartidores para el piloto medible. Definir métricas antes de arrancar (ver **#mercado**).\n\n**Deadline:** oct 2026",
+          "inline": false
+        },
+        {
+          "name": "🔵  Negociación del deal — Todo el equipo + abogado",
+          "value": "Con empresa constituida y piloto iniciado, retomar la conversación con el inversionista. Proponer 15% por $400k MXN o 20% por $600k. Ningún documento se firma sin revisión legal.\n\n**Deadline:** cuando PI + empresa + datos estén resueltos",
+          "inline": false
+        }
+      ],
+      "footer": {
+        "text": "VYGO · Asignación de tareas · sept 2026 · Actualizar este mensaje cuando cambien los responsables."
+      },
+      "timestamp": "2026-09-24T00:00:00Z"
+    }
+  ]
+}
