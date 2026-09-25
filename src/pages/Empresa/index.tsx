@@ -164,7 +164,7 @@ function TabPrioridades() {
       </InfoBox>
 
       <InfoBox type="info">
-        Luis (tú) cumples 18 en ~2 meses. No necesitas poner tus acciones a nombre de otra persona. El abogado debe diseñar tu participación con la formalidad que corresponde a tu situación actual. No firmes una cesión de código ni un convenio de inversión sin revisión legal.
+        Uno de los fundadores alcanza la mayoría de edad en noviembre 2025. El abogado debe estructurar su participación accionaria con las formalidades correspondientes a su situación actual. Se recomienda postergar la firma de cualquier cesión de código o convenio de inversión hasta contar con revisión legal, o bien hasta que dicha mayoría de edad esté consolidada.
       </InfoBox>
 
       {items.map((item) => (
