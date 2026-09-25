@@ -10,6 +10,7 @@ import { ActiveRoutePage } from '@/pages/ActiveRoute'
 import { OrderDetailPage } from '@/pages/OrderDetail'
 import { EarningsPage } from '@/pages/Earnings'
 import { ProfilePage } from '@/pages/Profile'
+import { EmpresaPage } from '@/pages/Empresa'
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
@@ -37,6 +38,7 @@ export function App() {
           <Route path="/route"      element={<ActiveRoutePage />} />
           <Route path="/earnings"   element={<EarningsPage />} />
           <Route path="/profile"    element={<ProfilePage />} />
+          <Route path="/empresa"    element={<EmpresaPage />} />
         </Route>
 
         <Route path="*" element={<Navigate to="/" replace />} />

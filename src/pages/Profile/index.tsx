@@ -8,6 +8,7 @@ import {
   ChevronRight,
   Shield,
   Star,
+  Building2,
 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useDriverStore } from '@/stores/driver.store'
@@ -60,6 +61,7 @@ export function ProfilePage() {
     },
     { icon: Bell, label: 'Notificaciones' },
     { icon: HelpCircle, label: 'Soporte' },
+    { icon: Building2, label: 'Plan Empresa', subtitle: 'Legal · Mercado · Presupuesto', onPress: () => navigate('/empresa') },
   ]
 
   return (
